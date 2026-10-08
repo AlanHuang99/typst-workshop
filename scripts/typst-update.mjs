@@ -1,4 +1,4 @@
-// Moves the helper to a newer Typst release, as typst-update.yml does once a week: the pins of the typst crates and TYPST_VERSION, the helper's other crates (cargo update), the Rust version the helper needs, typst's NOTICE, the licences of the helper crates (scripts/helper-licenses.mjs), the Typst versions named in README.md and THIRD_PARTY_NOTICES.md, the versions of the helper and of the extension, and a CHANGELOG.md entry.
+// Moves the helper to a newer Typst release, as typst-update.yml does once a week: the pins of the typst crates and TYPST_VERSION, the helper's other crates (cargo update; the crates it shares with Typst at Typst's versions), the Rust version that the helper's crates need, typst's NOTICE, the licences of the helper crates (scripts/helper-licenses.mjs), the Typst versions named in README.md and THIRD_PARTY_NOTICES.md, the versions of the helper and of the extension, and a CHANGELOG.md entry.
 // Usage: node scripts/typst-update.mjs pinned            prints the Typst version the helper is pinned to
 //        node scripts/typst-update.mjs check             prints pinned=, latest= (the newest stable Typst on crates.io) and newer= lines, for $GITHUB_OUTPUT
 //        node scripts/typst-update.mjs apply <version>   moves to Typst <version> and prints a summary in Markdown (needs cargo, cargo-about, npm, git and network access)
@@ -85,6 +85,22 @@ export function nextVersion(version, from, to) {
 }
 
 /**
+ * The extension's version after a move from Typst `from` to Typst `to`: the next version (`nextVersion`) when the current version is released (tagged v<version>); otherwise the version that the newest release (the highest tag v<x.y.z>) needs for the move when the current version is lower than that, else the current version; the current version when nothing is released.
+ * @param {string} current the version in package.json
+ * @param {string[]} tags the tags of the repository
+ * @param {string} from
+ * @param {string} to
+ * @returns {string}
+ */
+export function extensionVersion(current, tags, from, to) {
+  if (tags.includes(`v${current}`)) return nextVersion(current, from, to);
+  const releases = tags.filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag)).map((tag) => tag.slice(1));
+  if (releases.length === 0) return current;
+  const needed = nextVersion(releases.reduce((a, b) => (compareVersions(a, b) >= 0 ? a : b)), from, to);
+  return compareVersions(current, needed) < 0 ? needed : current;
+}
+
+/**
  * Applies each replacement once; throws when a pattern matches nothing, so that a reworded file is noticed instead of keeping an old version.
  * @param {string} text
  * @param {string} file the file's name, for the error
@@ -120,6 +136,17 @@ export function helperVersion(cargoToml) {
 }
 
 /**
+ * helper/Cargo.toml with the requirement of the dependency `name` set to `version`, in the line's form: `name = "<version>"` or `name = { version = "<version>", … }`.
+ * @param {string} cargoToml
+ * @param {string} name
+ * @param {string} version
+ * @returns {string}
+ */
+export function withRequirement(cargoToml, name, version) {
+  return replaceEach(cargoToml, 'helper/Cargo.toml', [[new RegExp(`^(${name} = (?:"|\\{ version = "))[^"]+"`, 'm'), `$1${version}"`]]);
+}
+
+/**
  * The Rust version of a manifest (`rust-version = "1.92"`), or undefined.
  * @param {string} cargoToml
  * @returns {string | undefined}
@@ -137,6 +164,53 @@ export function rustVersion(cargoToml) {
 export function newerRust(a, b) {
   const [pa, pb] = [a, b].map((v) => [...v.split('.').map(Number), 0, 0].slice(0, 3));
   return (pa[0] - pb[0] || pa[1] - pb[1] || pa[2] - pb[2]) > 0;
+}
+
+/**
+ * @typedef {{ id: string, name: string, version: string, rust_version?: string | null }} CargoPackage
+ * @typedef {{ packages: CargoPackage[], resolve: { root: string, nodes: { id: string, deps: { pkg: string, dep_kinds: { kind: string | null }[] }[] }[] } }} CargoMetadata the output of `cargo metadata --format-version 1`
+ */
+
+/**
+ * The packages that a package of the resolve graph uses as normal dependencies (not dev or build), by name.
+ * @param {CargoMetadata} metadata
+ * @param {string} id
+ * @returns {Map<string, CargoPackage>}
+ */
+function normalDependencies(metadata, id) {
+  const packages = new Map(metadata.packages.map((p) => [p.id, p]));
+  const deps = metadata.resolve.nodes.find((n) => n.id === id)?.deps ?? [];
+  return new Map(deps.filter((d) => d.dep_kinds.some((k) => k.kind === null)).map((d) => packages.get(d.pkg)).filter((p) => p !== undefined).map((p) => [p.name, p]));
+}
+
+/**
+ * The helper's direct dependencies, other than the typst crates, that a typst crate uses too: each with the version the helper resolves to (`ours`), the version of the first typst crate that uses it (`theirs`, of crate `by`), and the versions of that crate in the whole graph.
+ * @param {CargoMetadata} metadata `cargo metadata` of the helper
+ * @returns {{ name: string, ours: string, theirs: string, by: string, versions: string[] }[]}
+ */
+export function sharedCrates(metadata) {
+  const ours = normalDependencies(metadata, metadata.resolve.root);
+  const typst = TYPST_CRATES.filter((name) => ours.has(name)).map((name) => ({ name, deps: normalDependencies(metadata, ours.get(name).id) }));
+  return [...ours].flatMap(([name, own]) => {
+    const user = TYPST_CRATES.includes(name) ? undefined : typst.find(({ deps }) => deps.has(name));
+    if (user === undefined) return [];
+    const versions = metadata.packages.filter((p) => p.name === name).map((p) => p.version);
+    return [{ name, ours: own.version, theirs: user.deps.get(name).version, by: user.name, versions }];
+  });
+}
+
+/**
+ * The package that needs the newest Rust (its `rust_version`), a typst crate among equals; undefined when no package names one.
+ * @param {CargoPackage[]} packages
+ * @returns {CargoPackage | undefined}
+ */
+export function highestRust(packages) {
+  const rank = (p) => (TYPST_CRATES.includes(p.name) ? TYPST_CRATES.indexOf(p.name) : TYPST_CRATES.length);
+  let highest;
+  for (const p of [...packages].sort((a, b) => rank(a) - rank(b))) {
+    if (p.rust_version && (highest === undefined || newerRust(p.rust_version, highest.rust_version))) highest = p;
+  }
+  return highest;
 }
 
 /**
@@ -193,25 +267,56 @@ export function lockedVersion(cargoLock, name) {
 }
 
 /**
- * CHANGELOG.md with the entry `line` for `version`: at the end of the first section when that section is `version` (not released yet), else in a new section "## <version> (<date>)" above the first one.
+ * Whether a line of CHANGELOG.md is the heading of the section of `version` ("## <version>" or "## <version> (<date>)").
+ * @param {string} line
+ * @param {string} version
+ * @returns {boolean}
+ */
+function isSection(line, version) {
+  return line === `## ${version}` || line.startsWith(`## ${version} `);
+}
+
+/**
+ * CHANGELOG.md with the entry "Compiles with Typst <typst>." for `version`: in the first section when that section is `version` (not released yet), in place of its "Compiles with Typst" line if it has one, else at its end; otherwise in a new section "## <version> (<date>)" above the first one.
  * @param {string} changelog
  * @param {string} version
  * @param {string} date YYYY-MM-DD
- * @param {string} line
+ * @param {string} typst
  * @returns {string}
  */
-export function changelogWith(changelog, version, date, line) {
+export function changelogWith(changelog, version, date, typst) {
+  const entry = `- Compiles with Typst ${typst}.`;
   const lines = changelog.split('\n');
   const first = lines.findIndex((l) => l.startsWith('## '));
   if (first < 0) throw new Error('CHANGELOG.md has no version section');
-  if (lines[first] === `## ${version}` || lines[first].startsWith(`## ${version} `)) {
+  if (isSection(lines[first], version)) {
     const next = lines.findIndex((l, i) => i > first && l.startsWith('## '));
     let end = next < 0 ? lines.length : next;
-    while (end > first + 1 && lines[end - 1].trim() === '') end--;
-    lines.splice(end, 0, `- ${line}`);
+    const earlier = lines.findIndex((l, i) => i > first && i < end && l.startsWith('- Compiles with Typst '));
+    if (earlier >= 0) {
+      lines[earlier] = entry;
+    } else {
+      while (end > first + 1 && lines[end - 1].trim() === '') end--;
+      lines.splice(end, 0, entry);
+    }
   } else {
-    lines.splice(first, 0, `## ${version} (${date})`, '', `- ${line}`, '');
+    lines.splice(first, 0, `## ${version} (${date})`, '', entry, '');
   }
+  return lines.join('\n');
+}
+
+/**
+ * CHANGELOG.md with the first section's heading renamed from version `from` to `to`, keeping the rest of the heading; unchanged when the first section is not `from`.
+ * @param {string} changelog
+ * @param {string} from
+ * @param {string} to
+ * @returns {string}
+ */
+export function changelogRenamed(changelog, from, to) {
+  const lines = changelog.split('\n');
+  const first = lines.findIndex((l) => l.startsWith('## '));
+  if (first < 0 || !isSection(lines[first], from)) return changelog;
+  lines[first] = `## ${to}${lines[first].slice(`## ${from}`.length)}`;
   return lines.join('\n');
 }
 
@@ -227,12 +332,39 @@ function run(command, args) {
   return result.stdout;
 }
 
-/** The body of a web resource; undefined when it does not exist (404). */
-async function download(url) {
-  const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-  if (response.status === 404) return undefined;
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-  return await response.text();
+/**
+ * The body of a web resource; undefined when it does not exist (404). Its errors name the URL.
+ * @param {string} url
+ * @returns {Promise<string | undefined>}
+ */
+export async function download(url) {
+  try {
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } catch (err) {
+    // fetch reports a network failure as "fetch failed", with the reason in `cause`.
+    const reason = err instanceof Error && err.cause instanceof Error ? err.cause.message || err.cause.code : undefined;
+    throw new Error(`${url}: ${err instanceof Error ? err.message : String(err)}${reason ? ` (${reason})` : ''}`);
+  }
+}
+
+/**
+ * What a move from Typst `from` to Typst `to` takes from Typst's repository: typst's NOTICE at v<to>, and for each file that a helper source adapts whether it changed between the two versions.
+ * @param {string} from
+ * @param {string} to
+ * @returns {Promise<{ notice: string, adapted: { file: string, ours: string, state: string }[] }>}
+ */
+export async function upstream(from, to) {
+  const notice = await download(`https://raw.githubusercontent.com/typst/typst/v${to}/NOTICE`);
+  if (notice === undefined) throw new Error(`Typst's repository has no NOTICE file at v${to}`);
+  const adapted = [];
+  for (const [ours, file] of ADAPTED) {
+    const [old, current] = await Promise.all([from, to].map((v) => download(`https://raw.githubusercontent.com/typst/typst/v${v}/${file}`)));
+    adapted.push({ file, ours, state: current === undefined ? `no longer exists in v${to}` : old === current ? 'unchanged' : 'changed' });
+  }
+  return { notice, adapted };
 }
 
 /** The newest stable release of the typst crate on crates.io. */
@@ -243,58 +375,73 @@ async function latestTypst() {
   return version;
 }
 
+/** The helper's other crates move to their newest versions that helper/Cargo.toml allows. */
+const updateCrates = () => run(localCargo(), ['update', '--manifest-path', 'helper/Cargo.toml']);
+
+/** @returns {CargoMetadata} `cargo metadata` of the helper with all its features, so that it covers the published builds. */
+const cargoMetadata = () => JSON.parse(run(localCargo(), ['metadata', '--format-version', '1', '--locked', '--all-features', '--manifest-path', 'helper/Cargo.toml']));
+
 /** Moves to Typst `to`; returns a summary in Markdown. */
 async function apply(to) {
   const cargoToml = read('helper/Cargo.toml');
   const from = pinnedTypst(cargoToml);
   if (compareVersions(to, from) <= 0) throw new Error(`the helper is pinned to Typst ${from}, which is not older than ${to}`);
-  const notice = await download(`https://raw.githubusercontent.com/typst/typst/v${to}/NOTICE`);
-  if (notice === undefined) throw new Error(`Typst's repository has no NOTICE file at v${to}`);
+  // Everything from Typst's repository first, so that a failed download leaves every file as it was.
+  const { notice, adapted } = await upstream(from, to);
 
   const helperFrom = helperVersion(cargoToml);
   const helperTo = nextVersion(helperFrom, from, to);
   write('helper/Cargo.toml', withHelperVersion(pinTypst(cargoToml, to), helperTo));
   write('helper/src/lib.rs', withTypstConstant(read('helper/src/lib.rs'), to));
-  // The helper's other crates move to their newest versions that the manifest allows.
-  run(localCargo(), ['update', '--manifest-path', 'helper/Cargo.toml']);
+  updateCrates();
+  let metadata = cargoMetadata();
 
-  const { packages } = JSON.parse(run(localCargo(), ['metadata', '--format-version', '1', '--locked', '--manifest-path', 'helper/Cargo.toml']));
-  const typstRust = packages.find((p) => p.name === 'typst')?.rust_version;
-  const ownRust = rustVersion(read('helper/Cargo.toml'));
-  const rust = typstRust && ownRust && newerRust(typstRust, ownRust) ? typstRust : undefined;
-  if (rust !== undefined) {
-    write('helper/Cargo.toml', read('helper/Cargo.toml').replace(/^rust-version = "[^"]+"/m, `rust-version = "${rust}"`));
-    // cargo picks the versions that the manifest's Rust version builds with, so the other crates move again.
-    run(localCargo(), ['update', '--manifest-path', 'helper/Cargo.toml']);
+  // A crate that the helper shares with Typst must be the same version for both, else the helper does not build: the helper takes Typst's.
+  const aligned = sharedCrates(metadata).filter((c) => c.ours !== c.theirs);
+  if (aligned.length > 0) {
+    write('helper/Cargo.toml', aligned.reduce((text, c) => withRequirement(text, c.name, c.theirs), read('helper/Cargo.toml')));
+    updateCrates();
+    metadata = cargoMetadata();
   }
 
+  const needs = highestRust(metadata.packages);
+  const ownRust = rustVersion(read('helper/Cargo.toml'));
+  const rust = needs?.rust_version && ownRust && newerRust(needs.rust_version, ownRust) ? needs : undefined;
+  if (rust !== undefined) {
+    write('helper/Cargo.toml', read('helper/Cargo.toml').replace(/^rust-version = "[^"]+"/m, `rust-version = "${rust.rust_version}"`));
+    // cargo picks the versions that the manifest's Rust version builds with, so the other crates move again.
+    updateCrates();
+    metadata = cargoMetadata();
+  }
+  const several = sharedCrates(metadata).filter((c) => c.versions.length > 1);
+
   write('licenses/typst-NOTICE.txt', notice);
-  write('README.md', readmeFor(read('README.md'), to, rust));
+  write('README.md', readmeFor(read('README.md'), to, rust?.rust_version));
   write('THIRD_PARTY_NOTICES.md', noticesFor(read('THIRD_PARTY_NOTICES.md'), to, lockedVersion(read('helper/Cargo.lock'), 'typst-assets')));
   run(process.execPath, [path.join(root, 'scripts', 'helper-licenses.mjs')]);
 
-  // A new version of the extension unless the current one is not released yet.
   const extensionFrom = JSON.parse(read('package.json')).version;
-  const released = run('git', ['tag', '--list', `v${extensionFrom}`]).trim() !== '';
-  const extensionTo = released ? nextVersion(extensionFrom, from, to) : extensionFrom;
-  if (released) run('npm', ['version', extensionTo, '--no-git-tag-version']);
+  const tags = run('git', ['tag', '--list']).split('\n');
+  const released = tags.includes(`v${extensionFrom}`);
+  const extensionTo = extensionVersion(extensionFrom, tags, from, to);
+  if (extensionTo !== extensionFrom) run('npm', ['version', extensionTo, '--no-git-tag-version']);
+  const before = read('CHANGELOG.md');
+  // An unreleased version raised for the update keeps its CHANGELOG section, under the new version.
+  const changelog = released ? before : changelogRenamed(before, extensionFrom, extensionTo);
+  const renamed = changelog !== before;
   const date = new Date().toISOString().slice(0, 10);
-  write('CHANGELOG.md', changelogWith(read('CHANGELOG.md'), extensionTo, date, `Compiles with Typst ${to}.`));
+  write('CHANGELOG.md', changelogWith(changelog, extensionTo, date, to));
 
-  const adapted = [];
-  for (const [ours, upstream] of ADAPTED) {
-    const [old, current] = await Promise.all([from, to].map((v) => download(`https://raw.githubusercontent.com/typst/typst/v${v}/${upstream}`)));
-    const state = current === undefined ? `no longer exists in v${to}` : old === current ? 'unchanged' : 'changed';
-    adapted.push(`  - \`${upstream}\` (adapted in \`${ours}\`): ${state}`);
-  }
   return [
     `Typst ${from} → ${to}: [release notes](https://github.com/typst/typst/releases/tag/v${to}), [changes](https://github.com/typst/typst/compare/v${from}...v${to}).`,
     '',
-    `- Extension ${extensionFrom}${released ? ` → ${extensionTo}` : ' (not released yet)'}, helper ${helperFrom} → ${helperTo}; CHANGELOG.md has the entry.`,
-    `- The helper's other crates are at their newest versions that helper/Cargo.toml allows (cargo update)${rust === undefined ? '' : `; the helper needs Rust ${rust}, as typst ${to} does`}.`,
+    `- Extension ${extensionFrom}${released ? '' : ' (not released yet)'}${extensionTo === extensionFrom ? '' : ` → ${extensionTo}`}, helper ${helperFrom} → ${helperTo}; ${renamed ? `the CHANGELOG.md section of ${extensionFrom} is now ${extensionTo} and has the entry` : 'CHANGELOG.md has the entry'}.`,
+    `- The helper's other crates are at their newest versions that helper/Cargo.toml allows (cargo update)${rust === undefined ? '' : `; the helper needs Rust ${rust.rust_version}, as ${rust.name} ${rust.version} does`}.`,
+    ...(aligned.length === 0 ? [] : [`- The crates that the helper shares with Typst are at Typst's versions: ${aligned.map((c) => `${c.name} ${c.ours} → ${c.theirs}, as ${c.by} uses`).join('; ')}.`]),
+    ...several.map((c) => `- helper/Cargo.lock still has several versions of ${c.name}: ${c.versions.join(', ')}.`),
     '- `licenses/typst-NOTICE.txt`, `helper/THIRD_PARTY_LICENSES.md`, `THIRD_PARTY_NOTICES.md` and `README.md` follow.',
     '- Files of Typst that helper sources adapt, from the old to the new version:',
-    ...adapted,
+    ...adapted.map(({ file, ours, state }) => `  - \`${file}\` (adapted in \`${ours}\`): ${state}`),
     '',
   ].join('\n');
 }
