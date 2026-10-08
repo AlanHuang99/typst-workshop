@@ -32,7 +32,8 @@ jobs:
             rust-target: x86_64-unknown-linux-musl
             helper-features: vendored-openssl
             typst-asset: typst-x86_64-unknown-linux-musl.tar.xz
-          - os: macos-15
+          # macos-latest runs on Apple silicon; like ubuntu-latest, it follows GitHub's newest image.
+          - os: macos-latest
             target: darwin-arm64
             rust-target: aarch64-apple-darwin
             helper-features: ''
