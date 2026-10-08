@@ -424,7 +424,7 @@
             "double-click"
           ],
           "enumDescriptions": [
-            "Ctrl+click (Cmd+click on macOS) in the PDF opens the source.",
+            "Ctrl+click (on macOS, Cmd+click or Ctrl+click) in the PDF opens the source.",
             "Double-click in the PDF opens the source."
           ],
           "default": "ctrl-click",

@@ -2,7 +2,8 @@
 
 ## 0.2.1 (2026-10-08)
 
-- On a macOS client, Ctrl+click in the PDF opens the source, as Cmd+click does.
+- Packages for macOS on Apple silicon (`darwin-arm64`), on the Releases page and on Open VSX.
+- On macOS, Ctrl+click in the PDF opens the source, as Cmd+click does.
 - Jumps between the PDF and the source are listed in the log (Show Log) with the page, file, line and character, or with a note that nothing was found.
 - The PDF tab shows the Typst Workshop icon.
 - If the extension cannot start, an error message gives the reason and suggests reloading the window, and the log has the error.

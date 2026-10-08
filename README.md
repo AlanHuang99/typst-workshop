@@ -12,12 +12,12 @@ A VS Code extension for writing Typst documents with the PDF beside the editor:
 
 Compilation uses the Typst 0.15.1 compiler crates, built into the extension's helper program.
 
-Platform: Linux x64. The extension runs where VS Code's extension host runs, so it also works from macOS or Windows clients connected over Remote-SSH to a Linux x64 host.
+Platforms: Linux x64 and macOS on Apple silicon. The extension runs where VS Code's extension host runs; over Remote-SSH, that is the remote host, whatever the system of the client.
 
 ## Install
 
 - Editors that install extensions from [Open VSX](https://open-vsx.org/extension/alanhuang/typst-workshop): install `alanhuang.typst-workshop` from the Extensions view.
-- VS Code: download `typst-workshop-linux-x64-<version>.vsix` from the [Releases page](https://github.com/AlanHuang99/typst-workshop/releases) and run `code --install-extension <file>`. Over Remote-SSH, the extension runs on the remote host: run the command in a terminal of the remote window.
+- VS Code: download the `.vsix` for the platform, `typst-workshop-linux-x64-<version>.vsix` or, for macOS on Apple silicon, `typst-workshop-darwin-arm64-<version>.vsix`, from the [Releases page](https://github.com/AlanHuang99/typst-workshop/releases) and run `code --install-extension <file>`. Over Remote-SSH, the extension runs on the remote host: take the file for the remote host's platform and run the command in a terminal of the remote window.
 
 ## Use
 
@@ -36,9 +36,9 @@ Open the folder that contains the Typst project and any `.typ` file in it.
 | Open the log | | Typst Workshop: Show Log |
 | Open the settings of this extension | | Typst Workshop: Open Settings |
 
-On a macOS client, use Cmd instead of Ctrl; in the PDF, both Cmd+click and Ctrl+click open the source. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
+On macOS, use Cmd instead of Ctrl; in the PDF, both Cmd+click and Ctrl+click open the source. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
 
-Each jump between the PDF and the source is listed in the log (Typst Workshop: Show Log) with its page, file, line and character, or with a note that nothing was found.
+Each jump from the PDF to the source, and each Show Cursor Position in PDF, is listed in the log (Typst Workshop: Show Log) with its page, file, line and character, or with a note that nothing was found.
 
 Automatic builds follow `typst-workshop.autoBuild.run`. When the window opens or reloads, the project of the active Typst editor is built once, and so is the project of each restored PDF tab when that tab is first shown, unless the setting is `never`.
 
@@ -131,7 +131,7 @@ npm run icon              # renders media/icon.png from media/icon.svg
 
 The extension-host tests run in the VS Code given by the environment variable `VSCODE_EXECUTABLE`, else in `/usr/share/code/code` when it exists, else in VS Code stable downloaded into `.vscode-test/`; on Linux without a display they run under `xvfb-run -a`. F5 starts an Extension Development Host on `test/fixtures/workspace`.
 
-The helper is compiled against the Typst crates pinned in `helper/Cargo.toml` (`=0.15.1`). To move to a newer Typst release, change those pins and `TYPST_VERSION` in `helper/src/lib.rs`, run `npm run test:helper` and `npm run licenses:helper`, replace `licenses/typst-NOTICE.txt` with the `NOTICE` file of the new Typst release (and its version in `THIRD_PARTY_NOTICES.md`), and rebuild the package.
+The helper is compiled against the Typst crates pinned in `helper/Cargo.toml`. `node scripts/typst-update.mjs apply <version>` moves it to another Typst release: the pins and `TYPST_VERSION` in `helper/src/lib.rs`, the helper's other crates (`cargo update`), `licenses/typst-NOTICE.txt`, `helper/THIRD_PARTY_LICENSES.md` (this needs cargo-about), the Typst versions in this README and in `THIRD_PARTY_NOTICES.md`, the versions of the helper and of the extension, and a CHANGELOG entry. The workflow `.github/workflows/typst-update.yml` does this every Monday when crates.io has a newer Typst release, and opens a pull request for it.
 
 ## Licence
 
