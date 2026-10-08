@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { ForwardResult, InverseParams, SourceLocation } from './helper/protocol';
 import type { Logger } from './log';
@@ -10,6 +11,18 @@ import type { IndicatorStyle } from './viewer/messages';
 export const NO_SOURCE = 'No source found at this point';
 export const NO_POSITION = 'No PDF position for the cursor';
 const HIGHLIGHT_MS = 600;
+
+/** A file for the log: relative to the project root with `/` as separator, or the absolute path when the file lies outside the root. */
+function logPath(file: string, root: string): string {
+  const relative = path.relative(root, file);
+  const outside = relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  return outside ? file : relative.split(path.sep).join('/');
+}
+
+/** The start of the log line of a source → PDF jump, `Show a.typ:4:8 in main.pdf`; line and character are 1-based. */
+function showLine(project: Pick<Project, 'root' | 'pdf'>, file: string, position: { line: number; character: number }): string {
+  return `Show ${logPath(file, project.root)}:${position.line + 1}:${position.character + 1} in ${path.basename(project.pdf)}`;
+}
 
 /** The editor column for a PDF → source jump: the column of the last active Typst editor if it is visible and is not the tab's column, else the first other editor group, else column one. */
 export function chooseSourceColumn(a: { lastTypstColumn?: number; visibleColumns: number[]; viewerColumn?: number }): number {
@@ -51,7 +64,7 @@ export interface SyncDeps {
   logger: Logger;
 }
 
-/** Show Cursor Position in PDF: the project comes from the dependency sets or entry resolution; without a successful build it builds first; the tab opens beside if needed, keeping the focus on the editor. */
+/** Show Cursor Position in PDF: the project comes from the dependency sets or entry resolution; without a successful build it builds first; the tab opens beside if needed, keeping the focus on the editor. The result is logged: the cursor position and the page shown, or that there is no position. */
 export async function syncToPdf(d: SyncDeps): Promise<void> {
   const file = typstFile(d.editor);
   if (file === undefined || !d.editor) return;
@@ -62,22 +75,27 @@ export async function syncToPdf(d: SyncDeps): Promise<void> {
     project = d.projects.getOrCreate(entry);
   }
   if (!(await project.ensureBuilt('show in PDF'))) {
+    d.logger.info(`${showLine(project, file, d.editor.selection.active)}: no position`);
     d.flash(NO_POSITION);
     return;
   }
   const cursor = d.editor.selection.active;
+  const shown = showLine(project, file, cursor);
   let result: ForwardResult;
   try {
     result = await project.forward({ path: file, line: cursor.line, character: cursor.character });
   } catch (err) {
     d.logger.warn(`Forward lookup failed: ${errorText(err)}`);
+    d.logger.info(`${shown}: no position`);
     d.flash(NO_POSITION);
     return;
   }
   if (result.positions.length === 0) {
+    d.logger.info(`${shown}: no position`);
     d.flash(NO_POSITION);
     return;
   }
+  d.logger.info(`${shown}: page ${result.positions[0].page}`);
   await d.viewers.open(project.pdf, { preserveFocus: true, beside: true });
   d.viewers.forward(project.pdf, result.positions, d.indicator());
 }
@@ -113,16 +131,21 @@ export interface InverseDeps {
   logger: Logger;
 }
 
-/** PDF → source: the project owning the PDF answers `inverse` and the source opens at that character. */
+/** PDF → source: the project owning the PDF answers `inverse` and the source opens at that character. Every jump is logged: the PDF page and point, and the source file, line and character (1-based) or that nothing was found. */
 export async function inverseSearch(pdf: string, p: InverseParams, d: InverseDeps): Promise<void> {
+  const from = `Jump from ${path.basename(pdf)} page ${p.page}`;
+  const noSource = (): void => {
+    d.logger.info(`${from}: no source at this point`);
+    d.flash(NO_SOURCE);
+  };
   const project = d.projectFor(pdf);
   if (!project) {
     d.logger.info(`No project writes ${pdf}; build it once to jump from this tab to the source`);
-    d.flash(NO_SOURCE);
+    noSource();
     return;
   }
   if (!(await project.ensureBuilt('inverse'))) {
-    d.flash(NO_SOURCE);
+    noSource();
     return;
   }
   let location: SourceLocation | null;
@@ -130,12 +153,13 @@ export async function inverseSearch(pdf: string, p: InverseParams, d: InverseDep
     location = await project.inverse(p);
   } catch (err) {
     d.logger.warn(`Inverse lookup failed: ${errorText(err)}`);
-    d.flash(NO_SOURCE);
+    noSource();
     return;
   }
   if (!location) {
-    d.flash(NO_SOURCE);
+    noSource();
     return;
   }
+  d.logger.info(`${from} (${Math.round(p.x)}, ${Math.round(p.y)} pt): ${logPath(location.path, project.root)}:${location.line + 1}:${location.character + 1}`);
   await revealSource(location, d.column());
 }

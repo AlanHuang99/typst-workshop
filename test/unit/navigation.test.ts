@@ -15,9 +15,10 @@ afterEach(() => vi.useRealTimers());
 const rect: PdfRect = { page: 2, left: 72, bottom: 700, right: 140, top: 688, x: 80, y: 694 };
 
 /** A project whose `ensureBuilt` answers `ensured` (default true). */
-function fakeProject(o: { entry?: string; deps?: string[]; ensured?: boolean; positions?: PdfRect[]; location?: SourceLocation | null } = {}) {
+function fakeProject(o: { entry?: string; root?: string; deps?: string[]; ensured?: boolean; positions?: PdfRect[]; location?: SourceLocation | null } = {}) {
   return {
     entry: o.entry ?? '/w/main.typ',
+    root: o.root ?? '/w',
     pdf: (o.entry ?? '/w/main.typ').replace(/\.typ$/, '.pdf'),
     dependencies: new Set(o.deps ?? ['/w/main.typ', '/w/a.typ']),
     ensureBuilt: vi.fn(async (_trigger: string) => o.ensured ?? true),
@@ -45,7 +46,7 @@ function editorAt(file: string, line: number, character: number): FakeTextEditor
   return e;
 }
 
-function syncDeps(over: Partial<SyncDeps> & { project?: FakeProject }): SyncDeps & { flashes: string[] } {
+function syncDeps(over: Partial<SyncDeps> & { project?: FakeProject }): SyncDeps & { flashes: string[]; logger: ReturnType<typeof memoryLogger> } {
   const flashes: string[] = [];
   return Object.assign(
     {
@@ -129,6 +130,68 @@ describe('syncToPdf', () => {
     await syncToPdf(md);
     expect(none.viewers.open).not.toHaveBeenCalled();
     expect(md.viewers.open).not.toHaveBeenCalled();
+  });
+});
+
+describe('the log of a forward jump', () => {
+  test('the file relative to the project root, the cursor as line:character (1-based), the PDF and its page', async () => {
+    const d = syncDeps({ project: fakeProject() });
+    await syncToPdf(d);
+    expect(d.logger.lines).toEqual(['info Show a.typ:4:8 in main.pdf: page 2']);
+  });
+
+  test('a file in a folder of the project keeps the folder, with slashes', async () => {
+    const project = fakeProject({ entry: '/w/Manuscript.typ', deps: ['/w/Manuscript.typ', '/w/Sections/intro.typ'] });
+    const d = syncDeps({ project, editor: editorAt('/w/Sections/intro.typ', 13, 6) as never });
+    await syncToPdf(d);
+    expect(d.logger.lines).toEqual(['info Show Sections/intro.typ:14:7 in Manuscript.pdf: page 2']);
+  });
+
+  test('a file outside the root of the project that wrote the PDF is shown with its absolute path', async () => {
+    const project = fakeProject({ entry: '/w/proj/main.typ', root: '/w/proj', deps: ['/w/proj/main.typ', '/w/shared/a.typ', '/w/proj2/b.typ'] });
+    const outside = syncDeps({ project, editor: editorAt('/w/shared/a.typ', 0, 0) as never });
+    await syncToPdf(outside);
+    const sibling = syncDeps({ project, editor: editorAt('/w/proj2/b.typ', 0, 0) as never });
+    await syncToPdf(sibling);
+    expect(outside.logger.lines).toEqual(['info Show /w/shared/a.typ:1:1 in main.pdf: page 2']);
+    expect(sibling.logger.lines).toEqual(['info Show /w/proj2/b.typ:1:1 in main.pdf: page 2']);
+  });
+
+  test('the page is the one of the first position', async () => {
+    const second: PdfRect = { ...rect, page: 5 };
+    const d = syncDeps({ project: fakeProject({ positions: [{ ...rect, page: 3 }, second] }) });
+    await syncToPdf(d);
+    expect(d.logger.lines).toEqual(['info Show a.typ:4:8 in main.pdf: page 3']);
+  });
+
+  test('no position: nothing found, no successful build, or a failing lookup', async () => {
+    const empty = syncDeps({ project: fakeProject({ positions: [] }) });
+    await syncToPdf(empty);
+    const unbuilt = syncDeps({ project: fakeProject({ ensured: false }) });
+    await syncToPdf(unbuilt);
+    const failing = fakeProject();
+    failing.forward.mockRejectedValueOnce(new Error('the helper exited (code 3)'));
+    const failed = syncDeps({ project: failing });
+    await syncToPdf(failed);
+    expect(empty.logger.lines).toEqual(['info Show a.typ:4:8 in main.pdf: no position']);
+    expect(unbuilt.logger.lines).toEqual(['info Show a.typ:4:8 in main.pdf: no position']);
+    expect(failed.logger.lines).toEqual(['warn Forward lookup failed: the helper exited (code 3)', 'info Show a.typ:4:8 in main.pdf: no position']);
+  });
+
+  test('a project found through entry resolution is named by its own root and PDF', async () => {
+    const d = syncDeps({ project: undefined, resolveManual: vi.fn(async () => '/w/other.typ') });
+    (d.projects as unknown as ReturnType<typeof managerWith>).getOrCreate.mockImplementation((entry: string) => fakeProject({ entry, root: '/w', deps: [entry] }));
+    await syncToPdf(d);
+    expect(d.logger.lines).toEqual(['info Show a.typ:4:8 in other.pdf: page 2']);
+  });
+
+  test('nothing is logged when the command does nothing (no Typst editor, no entry)', async () => {
+    const none = syncDeps({ project: fakeProject(), editor: undefined });
+    await syncToPdf(none);
+    const noEntry = syncDeps({ project: undefined });
+    await syncToPdf(noEntry);
+    expect(none.logger.lines).toEqual([]);
+    expect(noEntry.logger.lines).toEqual([]);
   });
 });
 
@@ -232,5 +295,61 @@ describe('revealSource and inverseSearch', () => {
     await inverseSearch('/w/main.pdf', { page: 1, x: 0, y: 0 }, deps(unbuilt));
     expect(unbuilt.inverse).not.toHaveBeenCalled();
     expect(flashes).toEqual(['No source found at this point']);
+  });
+});
+
+describe('the log of an inverse jump', () => {
+  function run(project: unknown, p: { page: number; x: number; y: number }, pdf = '/w/main.pdf') {
+    const logger = memoryLogger();
+    const flashes: string[] = [];
+    const done = inverseSearch(pdf, p, { projectFor: () => project as Project | undefined, column: () => 1, flash: (m) => flashes.push(m), logger });
+    return done.then(() => ({ lines: logger.lines, flashes }));
+  }
+
+  test('the PDF, page and point (whole points), then the source file relative to the project root, line and character (1-based)', async () => {
+    const project = fakeProject({ entry: '/w/Manuscript.typ', location: { path: '/w/Sections/intro.typ', line: 13, character: 6 } });
+    const { lines } = await run(project, { page: 3, x: 212.4, y: 455.6 }, '/w/Manuscript.pdf');
+    expect(lines).toEqual(['info Jump from Manuscript.pdf page 3 (212, 456 pt): Sections/intro.typ:14:7']);
+  });
+
+  test('the PDF is named by its file name, wherever it is', async () => {
+    const project = fakeProject({ location: { path: '/w/a.typ', line: 0, character: 0 } });
+    const { lines } = await run(project, { page: 1, x: 10, y: 20 }, '/out/Ä b/Draft.pdf');
+    expect(lines).toEqual(['info Jump from Draft.pdf page 1 (10, 20 pt): a.typ:1:1']);
+  });
+
+  test('coordinates are rounded to whole points', async () => {
+    const project = fakeProject({ location: { path: '/w/a.typ', line: 0, character: 0 } });
+    expect((await run(project, { page: 1, x: 0.4, y: 0.5 })).lines).toEqual(['info Jump from main.pdf page 1 (0, 1 pt): a.typ:1:1']);
+    expect((await run(project, { page: 1, x: 299.6, y: -0.2 })).lines).toEqual(['info Jump from main.pdf page 1 (300, 0 pt): a.typ:1:1']);
+  });
+
+  test('a source file outside the root of the project that wrote the PDF is shown with its absolute path', async () => {
+    const project = fakeProject({ root: '/w/proj', entry: '/w/proj/main.typ', location: { path: '/w/shared/lib.typ', line: 4, character: 2 } });
+    const { lines } = await run(project, { page: 2, x: 5, y: 6 });
+    expect(lines).toEqual(['info Jump from main.pdf page 2 (5, 6 pt): /w/shared/lib.typ:5:3']);
+  });
+
+  test('a file whose name starts with two dots is inside the root', async () => {
+    const project = fakeProject({ location: { path: '/w/..notes.typ', line: 0, character: 0 } });
+    const { lines } = await run(project, { page: 1, x: 1, y: 1 });
+    expect(lines).toEqual(['info Jump from main.pdf page 1 (1, 1 pt): ..notes.typ:1:1']);
+  });
+
+  test('no source at the point', async () => {
+    const { lines, flashes } = await run(fakeProject({ location: null }), { page: 2, x: 5, y: 6 });
+    expect(lines).toEqual(['info Jump from main.pdf page 2: no source at this point']);
+    expect(flashes).toEqual(['No source found at this point']);
+  });
+
+  test('no source: a failing lookup, no successful build, or no project for the PDF', async () => {
+    const failing = fakeProject();
+    failing.inverse.mockRejectedValueOnce(new Error('timeout'));
+    expect((await run(failing, { page: 1, x: 5, y: 6 })).lines).toEqual(['warn Inverse lookup failed: timeout', 'info Jump from main.pdf page 1: no source at this point']);
+    expect((await run(fakeProject({ ensured: false }), { page: 4, x: 5, y: 6 })).lines).toEqual(['info Jump from main.pdf page 4: no source at this point']);
+    expect((await run(undefined, { page: 2, x: 5, y: 6 })).lines).toEqual([
+      'info No project writes /w/main.pdf; build it once to jump from this tab to the source',
+      'info Jump from main.pdf page 2: no source at this point',
+    ]);
   });
 });

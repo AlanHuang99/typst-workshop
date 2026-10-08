@@ -98,7 +98,7 @@ suite('Typst Workshop', function () {
     assert.equal(outcome.result?.success, true, `outcome: ${JSON.stringify(outcome)}`);
   });
 
-  test('Show Cursor Position in PDF finds the word under the cursor, and the PDF tab shows main.pdf without warnings', async () => {
+  test('Show Cursor Position in PDF finds the word under the cursor and logs the jump, and the PDF tab shows main.pdf with the extension icon and without warnings', async () => {
     // Only the log lines written during this test count: another suite may have shown main.pdf in a tab before.
     const earlier = api.logLines();
     const logged = () => linesSince(earlier, api.logLines());
@@ -110,6 +110,12 @@ suite('Typst Workshop', function () {
     await vscode.commands.executeCommand('typst-workshop.syncToPdf');
     assert.equal(api.viewers.lastForward?.pdf, pdf);
     assert.ok((api.viewers.lastForward?.positions.length ?? 0) > 0, `positions: ${JSON.stringify(api.viewers.lastForward)}`);
+    // The jump is in the log: the file relative to the project root, the cursor as line:character (1-based), the PDF and its page.
+    const jump = `info: Show sections/a.typ:1:${column + 2} in main.pdf: page 1`;
+    assert.ok(logged().includes(jump), `the log of this test has "${jump}":\n${logged().join('\n')}`);
+    // The tab carries the icon of the extension.
+    const icon = api.viewers.panelsFor(pdf)[0]?.panel.iconPath;
+    assert.ok(icon instanceof vscode.Uri && fs.existsSync(icon.fsPath) && icon.fsPath.endsWith(path.join('media', 'icon.png')), `the icon of the tab: ${String(icon)}`);
     // The tab reports a shown document through the log: pdf.js started in the real webview (the bundle and the blob-URL worker under its CSP) and the one-page PDF is in place. Any warning or error from the tab, such as the worker fallback, fails the test.
     const shown = 'info: [viewer] Showing main.pdf: 1 page';
     await waitFor(() => logged().includes(shown), 20_000, () => `the PDF tab to log "${shown}"; the log of this test:\n${logged().join('\n')}`);
