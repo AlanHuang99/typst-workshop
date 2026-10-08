@@ -1,4 +1,4 @@
-# Once a week, and when started by hand: if crates.io has a stable Typst newer than the one the helper is pinned to, and no pull request for it exists yet (closing one skips that version), scripts/typst-update.mjs moves the helper to it on the branch typst-<version>, a pull request is opened for that branch, and CI runs on it. Merging and releasing stay manual.
+# Once a week, and when started by hand on main: if crates.io has a stable Typst newer than the one the helper is pinned to, and this repository has no pull request for it yet (closing one skips that version), the first job moves the helper to it with scripts/typst-update.mjs, and the second job pushes the result to the branch typst-<version>, opens a pull request for that branch and starts CI on it. Merging and releasing stay manual.
 name: Typst update
 
 on:
@@ -14,19 +14,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
+  # Runs third-party code (dtolnay/rust-toolchain, cargo-about), so its token only reads and the checkout does not keep it.
+  prepare:
     name: Move to the newest Typst
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # pushes the branch typst-<version>
-      pull-requests: write # opens its pull request
-      actions: write # starts CI on the branch (a pull request opened with this workflow's token does not start workflows)
+      contents: read
+      pull-requests: read # gh pr list
+    outputs:
+      newer: ${{ steps.check.outputs.newer }}
+      exists: ${{ steps.check.outputs.exists }}
+      latest: ${{ steps.check.outputs.latest }}
+      branch: ${{ steps.check.outputs.branch }}
     steps:
-      # Full history and tags: the update gives the extension a new version only when its current one is released (tagged). The token stays for the push.
+      # Full history and tags: the extension's new version depends on its released (tagged) versions.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -42,7 +49,8 @@ jobs:
           echo "$versions" >> "$GITHUB_OUTPUT"
           branch="typst-$(echo "$versions" | sed -n 's/^latest=//p')"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          pulls="$(gh pr list --head "$branch" --state all --json number --jq length)"
+          # Pull requests of this repository only: a pull request from a fork can have a branch of the same name.
+          pulls="$(gh pr list --head "$branch" --state all --json isCrossRepository --jq '[.[] | select(.isCrossRepository | not)] | length')"
           if [ "$pulls" != 0 ]; then
             echo "A pull request for $branch exists already."
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -61,20 +69,49 @@ jobs:
         if: steps.check.outputs.newer == 'true' && steps.check.outputs.exists != 'true'
         env:
           LATEST: ${{ steps.check.outputs.latest }}
-        run: node scripts/typst-update.mjs apply "$LATEST" > "$RUNNER_TEMP/summary.md"
+        run: |
+          mkdir -p "$RUNNER_TEMP/typst-update"
+          node scripts/typst-update.mjs apply "$LATEST" > "$RUNNER_TEMP/typst-update/summary.md"
+          git diff --binary > "$RUNNER_TEMP/typst-update/update.patch"
+
+      - uses: actions/upload-artifact@v7
+        if: steps.check.outputs.newer == 'true' && steps.check.outputs.exists != 'true'
+        with:
+          name: typst-update
+          path: ${{ runner.temp }}/typst-update/
+          if-no-files-found: error
+
+  # Holds the write token, so it runs only git, gh and first-party actions.
+  publish:
+    name: Open the pull request
+    needs: prepare
+    if: needs.prepare.outputs.newer == 'true' && needs.prepare.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # pushes the branch typst-<version>
+      pull-requests: write # opens its pull request
+      actions: write # starts CI on the branch (a pull request opened with this workflow's token does not start workflows)
+    steps:
+      # The commit of this run, which the first job updated.
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: typst-update
+          path: ${{ runner.temp }}/typst-update
 
       - name: Push the branch, open the pull request and start CI
-        if: steps.check.outputs.newer == 'true' && steps.check.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          LATEST: ${{ steps.check.outputs.latest }}
-          BRANCH: ${{ steps.check.outputs.branch }}
+          LATEST: ${{ needs.prepare.outputs.latest }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$BRANCH"
-          git add -u
+          git apply --index "$RUNNER_TEMP/typst-update/update.patch"
           git commit -q -m "Typst $LATEST"
           git push --force origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" --title "Typst $LATEST" --body-file "$RUNNER_TEMP/summary.md"
+          gh pr create --base main --head "$BRANCH" --title "Typst $LATEST" --body-file "$RUNNER_TEMP/typst-update/summary.md"
           gh workflow run ci.yml --ref "$BRANCH"

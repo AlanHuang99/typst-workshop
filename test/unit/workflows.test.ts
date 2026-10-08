@@ -70,19 +70,55 @@ test('CI takes the Typst version from the pins of helper/Cargo.toml and runs onc
   expect(ci).toContain('https://github.com/typst/typst/releases/download/v$version/$TYPST_ASSET');
   expect(ci).toContain('expected="typst-workshop-helper $helper_version (typst $PINNED_TYPST)"');
   expect(ci).toMatch(/\n {2}schedule:\n {4}- cron: '[\d*]+ [\d*]+ \* \* \d'\n/);
-  // typst-utils reads TYPST_VERSION from the environment of the build, so no workflow sets a variable of that name.
-  for (const workflow of workflows) expect(workflow).not.toMatch(/\bTYPST_VERSION:/);
 });
 
-test('the Typst update runs once a week, prepares the branch typst-<version> with scripts/typst-update.mjs, opens its pull request and starts CI on it', () => {
+test('no workflow sets a variable named TYPST_VERSION, which typst-utils reads from the environment of the build: no env: key, no shell assignment, nothing written to $GITHUB_ENV', () => {
+  const setsTypstVersion = /\bTYPST_VERSION\s*[:=]/;
+  const settings = ['env:\n  TYPST_VERSION: 0.15.1', 'run: TYPST_VERSION=0.15.1 cargo build', 'run: echo "TYPST_VERSION=0.15.1" >> "$GITHUB_ENV"', 'run: export TYPST_VERSION="$version"'];
+  expect(settings.filter((text) => !setsTypstVersion.test(text))).toEqual([]);
+  for (const workflow of workflows) expect(workflow).not.toMatch(setsTypstVersion);
+});
+
+/** The jobs of a workflow by id. */
+function jobsOf(workflow: string): Record<string, string> {
+  const parts = workflow.split('\njobs:\n')[1].split(/\n(?= {2}[\w-]+:\n)/);
+  return Object.fromEntries(parts.flatMap((part) => {
+    const id = /^ {2}([\w-]+):$/m.exec(part)?.[1];
+    return id === undefined ? [] : [[id, part]];
+  }));
+}
+
+test('the Typst update runs once a week and when started by hand, on main only, in two jobs', () => {
   expect(typstUpdate).toMatch(/\n {2}schedule:\n {4}- cron: '[\d*]+ [\d*]+ \* \* \d'\n {2}workflow_dispatch:\n/);
-  expect(typstUpdate).toContain('versions="$(node scripts/typst-update.mjs check)"');
-  expect(typstUpdate).toContain('pulls="$(gh pr list --head "$branch" --state all --json number --jq length)"');
-  expect(typstUpdate).toContain('run: node scripts/typst-update.mjs apply "$LATEST" > "$RUNNER_TEMP/summary.md"');
-  expect(typstUpdate).toContain('git push --force origin "$BRANCH"');
-  expect(typstUpdate).toContain('gh pr create --base main --head "$BRANCH" --title "Typst $LATEST" --body-file "$RUNNER_TEMP/summary.md"');
-  expect(typstUpdate).toContain('gh workflow run ci.yml --ref "$BRANCH"');
-  expect(typstUpdate).toMatch(/\n {6}contents: write\b[^\n]*\n {6}pull-requests: write\b[^\n]*\n {6}actions: write\b/);
+  const jobs = jobsOf(typstUpdate);
+  expect(Object.keys(jobs)).toEqual(['prepare', 'publish']);
+  expect(jobs.prepare).toContain("\n    if: github.ref == 'refs/heads/main'\n");
+  expect(jobs.publish).toContain('\n    needs: prepare\n');
+});
+
+test('the first job, with a token that only reads and is not kept by the checkout, looks for a newer Typst without a pull request of this repository, runs scripts/typst-update.mjs and uploads the patch and the summary', () => {
+  const { prepare } = jobsOf(typstUpdate);
+  expect(prepare).toMatch(/\n {4}permissions:\n {6}contents: read\b[^\n]*\n {6}pull-requests: read\b[^\n]*\n {4}outputs:\n/);
+  expect(prepare).toContain('\n          fetch-depth: 0\n          persist-credentials: false\n');
+  for (const output of ['newer', 'exists', 'latest', 'branch']) expect(prepare).toContain(`\n      ${output}: \${{ steps.check.outputs.${output} }}\n`);
+  expect(prepare).toContain('versions="$(node scripts/typst-update.mjs check)"');
+  // A pull request from a fork can have a branch of the same name.
+  expect(prepare).toContain(`pulls="$(gh pr list --head "$branch" --state all --json isCrossRepository --jq '[.[] | select(.isCrossRepository | not)] | length')"`);
+  expect(prepare).toContain('node scripts/typst-update.mjs apply "$LATEST" > "$RUNNER_TEMP/typst-update/summary.md"');
+  expect(prepare).toContain('git diff --binary > "$RUNNER_TEMP/typst-update/update.patch"');
+  expect(prepare).toContain('- uses: actions/upload-artifact@v7');
+});
+
+test('the second job runs only when an update is due and only git, gh and first-party actions: it applies the patch to the same commit, pushes the branch typst-<version>, opens its pull request and starts CI on it', () => {
+  const { publish } = jobsOf(typstUpdate);
+  expect(publish).toContain("\n    if: needs.prepare.outputs.newer == 'true' && needs.prepare.outputs.exists != 'true'\n");
+  expect(publish).toMatch(/\n {4}permissions:\n {6}contents: write\b[^\n]*\n {6}pull-requests: write\b[^\n]*\n {6}actions: write\b[^\n]*\n {4}steps:\n/);
+  expect([...publish.matchAll(/uses: (\S+)/g)].map((m) => m[1])).toEqual(['actions/checkout@v7', 'actions/download-artifact@v8']);
+  expect(publish).not.toMatch(/\b(?:node|npm|npx|cargo|rustup)\b/);
+  expect(publish).toContain('git apply --index "$RUNNER_TEMP/typst-update/update.patch"');
+  expect(publish).toContain('git push --force origin "$BRANCH"');
+  expect(publish).toContain('gh pr create --base main --head "$BRANCH" --title "Typst $LATEST" --body-file "$RUNNER_TEMP/typst-update/summary.md"');
+  expect(publish).toContain('gh workflow run ci.yml --ref "$BRANCH"');
   // A push with the workflow token may not change workflow files, so the update leaves .github alone.
   expect(read('scripts/typst-update.mjs')).not.toMatch(/\.github\//);
 });
