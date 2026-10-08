@@ -9,7 +9,7 @@ use std::path::Path;
 use typst::World;
 use typst_workshop_helper::protocol::{Position, Range};
 use typst_workshop_helper::world::HelperWorld;
-use typst_workshop_helper::{Session, compile, lines};
+use typst_workshop_helper::{HELPER_VERSION, Session, TYPST_VERSION, compile, lines};
 
 #[test]
 fn world_resolves_project_files() {
@@ -47,8 +47,8 @@ fn initialize_reports_versions() {
     let r = s
         .initialize(common::init_params(&root, "main.typ"))
         .unwrap();
-    assert_eq!(r.typst_version, "0.15.1");
-    assert_eq!(r.helper_version, "0.1.0");
+    assert_eq!(r.typst_version, TYPST_VERSION);
+    assert_eq!(r.helper_version, HELPER_VERSION);
 }
 
 #[test]

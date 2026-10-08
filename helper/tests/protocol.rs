@@ -8,6 +8,8 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use typst_workshop_helper::{HELPER_VERSION, TYPST_VERSION};
+
 const TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A running helper process whose stdout is read line by line on a background thread.
@@ -102,7 +104,7 @@ fn version_flag() {
         .unwrap();
     assert_eq!(
         String::from_utf8_lossy(&out.stdout).trim(),
-        "typst-workshop-helper 0.1.0 (typst 0.15.1)"
+        format!("typst-workshop-helper {HELPER_VERSION} (typst {TYPST_VERSION})")
     );
 }
 
@@ -170,7 +172,7 @@ fn end_to_end_build_lookups_and_word_count() {
     let init = h.call(&request(1, "initialize", params));
     assert_eq!(
         init,
-        serde_json::json!({ "id": 1, "result": { "helperVersion": "0.1.0", "typstVersion": "0.15.1" } })
+        serde_json::json!({ "id": 1, "result": { "helperVersion": HELPER_VERSION, "typstVersion": TYPST_VERSION } })
     );
 
     let compile = h.call(&request(2, "compile", serde_json::json!({})));

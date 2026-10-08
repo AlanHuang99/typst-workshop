@@ -1,12 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { pinnedTypst } from '../../scripts/typst-update.mjs';
 
 const read = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
 const ci = read('.github/workflows/ci.yml');
 const release = read('.github/workflows/release.yml');
+const typstUpdate = read('.github/workflows/typst-update.yml');
+const workflows = readdirSync(new URL('../../.github/workflows/', import.meta.url)).map((file) => read(`.github/workflows/${file}`));
+
+test('the workflows are CI, Release and Typst update', () => {
+  expect(readdirSync(new URL('../../.github/workflows/', import.meta.url)).sort()).toEqual(['ci.yml', 'release.yml', 'typst-update.yml']);
+});
 
 test('third-party actions are pinned to a commit with the version as a comment; first-party actions use major tags', () => {
-  const uses = [...`${ci}\n${release}`.matchAll(/^\s*(?:- )?uses: (\S+)(.*)$/gm)].map((m) => ({ action: m[1], rest: m[2] }));
+  const uses = [...workflows.join('\n').matchAll(/^\s*(?:- )?uses: (\S+)(.*)$/gm)].map((m) => ({ action: m[1], rest: m[2] }));
   expect(uses.length).toBeGreaterThan(0);
   for (const { action, rest } of uses) {
     if (action.startsWith('./')) continue;
@@ -19,21 +26,27 @@ test('third-party actions are pinned to a commit with the version as a comment; 
 });
 
 test('every job that runs steps has a timeout', () => {
-  for (const workflow of [ci, release]) {
+  for (const workflow of workflows) {
     const jobs = workflow.split(/\n(?= {2}[\w-]+:\n)/).slice(1);
     for (const job of jobs.filter((j) => j.includes('\n    steps:'))) expect(job).toMatch(/\n {4}timeout-minutes: \d+\n/);
   }
 });
 
-test('the release checks the tag before the platform builds start', () => {
+test('the release checks the version before the platform builds start: against the tag, or, started by hand, that it runs on main and the version has no tag yet', () => {
+  expect(release).toMatch(/\non:\n {2}push:\n {4}tags: \['v\*'\]\n {2}workflow_dispatch:\n/);
   expect(release).toMatch(/\n {2}build:\n {4}needs: check\n {4}uses: \.\/\.github\/workflows\/ci\.yml\n/);
-  expect(release).toContain('if [ "$GITHUB_REF_NAME" != "v$version" ]; then');
+  expect(release).toContain('elif [ "$GITHUB_REF_NAME" != "v$version" ]; then');
+  expect(release).toContain('if [ "$GITHUB_REF" != refs/heads/main ]; then');
+  expect(release).toContain('tags="$(git ls-remote --tags origin "refs/tags/v$version")"');
+  expect(release).toContain('node scripts/release-notes.mjs "$version" > /dev/null');
+  expect(release).toContain('tag_name: v${{ env.VERSION }}');
+  expect(release).toContain('target_commitish: ${{ github.sha }}');
 });
 
-test('ovsx comes from tools/ovsx/package-lock.json and reads the token from the environment only', () => {
-  const tool = JSON.parse(read('tools/ovsx/package.json'));
-  expect(tool.dependencies).toEqual({ ovsx: '1.2.0' });
-  expect(JSON.parse(read('tools/ovsx/package-lock.json')).packages['node_modules/ovsx'].version).toBe('1.2.0');
+test('ovsx is pinned to one version, installed from tools/ovsx/package-lock.json, and reads the token from the environment only', () => {
+  const pinned = JSON.parse(read('tools/ovsx/package.json')).dependencies.ovsx;
+  expect(pinned).toMatch(/^\d+\.\d+\.\d+$/);
+  expect(JSON.parse(read('tools/ovsx/package-lock.json')).packages['node_modules/ovsx'].version).toBe(pinned);
   expect(release).toContain('run: npm ci --ignore-scripts --prefix tools/ovsx');
   expect(release).toContain('tools/ovsx/node_modules/.bin/ovsx publish "vsix/typst-workshop-$target-$VERSION.vsix" --skip-duplicate');
   expect(release).not.toMatch(/ovsx[^\n]*(?: -p | --pat)/);
@@ -48,4 +61,35 @@ test('linux-x64 and darwin-arm64 are built, released and published; macOS builds
   expect(ci).toContain('run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> "$GITHUB_ENV"');
   expect(ci).toContain('unzip -q "typst-workshop-$TARGET-$version.vsix" -d "$dir"');
   expect(ci).toContain('actual="$("$dir/extension/bin/typst-workshop-helper" --version)"');
+});
+
+test('CI takes the Typst version from the pins of helper/Cargo.toml and runs once a week as well', () => {
+  expect(ci).not.toMatch(/releases\/download\/v\d|\(typst \d|typst CLI \d/);
+  expect(ci).not.toContain(pinnedTypst(read('helper/Cargo.toml')));
+  expect(ci).toContain('version="$(node scripts/typst-update.mjs pinned)"');
+  expect(ci).toContain('https://github.com/typst/typst/releases/download/v$version/$TYPST_ASSET');
+  expect(ci).toContain('expected="typst-workshop-helper $helper_version (typst $PINNED_TYPST)"');
+  expect(ci).toMatch(/\n {2}schedule:\n {4}- cron: '[\d*]+ [\d*]+ \* \* \d'\n/);
+  // typst-utils reads TYPST_VERSION from the environment of the build, so no workflow sets a variable of that name.
+  for (const workflow of workflows) expect(workflow).not.toMatch(/\bTYPST_VERSION:/);
+});
+
+test('the Typst update runs once a week, prepares the branch typst-<version> with scripts/typst-update.mjs, opens its pull request and starts CI on it', () => {
+  expect(typstUpdate).toMatch(/\n {2}schedule:\n {4}- cron: '[\d*]+ [\d*]+ \* \* \d'\n {2}workflow_dispatch:\n/);
+  expect(typstUpdate).toContain('versions="$(node scripts/typst-update.mjs check)"');
+  expect(typstUpdate).toContain('pulls="$(gh pr list --head "$branch" --state all --json number --jq length)"');
+  expect(typstUpdate).toContain('run: node scripts/typst-update.mjs apply "$LATEST" > "$RUNNER_TEMP/summary.md"');
+  expect(typstUpdate).toContain('git push --force origin "$BRANCH"');
+  expect(typstUpdate).toContain('gh pr create --base main --head "$BRANCH" --title "Typst $LATEST" --body-file "$RUNNER_TEMP/summary.md"');
+  expect(typstUpdate).toContain('gh workflow run ci.yml --ref "$BRANCH"');
+  expect(typstUpdate).toMatch(/\n {6}contents: write\b[^\n]*\n {6}pull-requests: write\b[^\n]*\n {6}actions: write\b/);
+  // A push with the workflow token may not change workflow files, so the update leaves .github alone.
+  expect(read('scripts/typst-update.mjs')).not.toMatch(/\.github\//);
+});
+
+test('Dependabot updates the npm packages and the GitHub Actions, but not the Rust crates, pdfjs-dist or @types/vscode', () => {
+  const dependabot = read('.github/dependabot.yml');
+  expect([...dependabot.matchAll(/- package-ecosystem: (\S+)\n {4}directory: (\S+)/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual(['npm /', 'npm /tools/ovsx', 'github-actions /']);
+  expect(dependabot).toContain('- dependency-name: pdfjs-dist\n');
+  expect(dependabot).toContain("- dependency-name: '@types/vscode'\n");
 });

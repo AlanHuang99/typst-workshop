@@ -1,10 +1,12 @@
-# Builds, tests and packages the extension for linux-x64 and darwin-arm64. release.yml calls this workflow for version tags.
+# Builds, tests and packages the extension for linux-x64 and darwin-arm64. release.yml calls this workflow for releases. The weekly run builds main with the newest Rust and tests it in the newest VS Code, which no lock file pins.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '41 4 * * 1'
   workflow_dispatch:
   workflow_call:
 
@@ -12,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -64,14 +66,17 @@ jobs:
           workspaces: helper
           key: ${{ matrix.rust-target }}
 
-      # The PDF tab tests compile their fixtures with the typst CLI.
-      - name: Install the typst CLI 0.15.1
+      # The PDF tab tests compile their fixtures with the typst CLI of the Typst version the helper is pinned to.
+      - name: Install the typst CLI
+        id: typst
         env:
           TYPST_ASSET: ${{ matrix.typst-asset }}
         run: |
-          curl -fsSL --retry 3 "https://github.com/typst/typst/releases/download/v0.15.1/$TYPST_ASSET" | tar -xJf - -C "$RUNNER_TEMP"
+          version="$(node scripts/typst-update.mjs pinned)"
+          curl -fsSL --retry 3 "https://github.com/typst/typst/releases/download/v$version/$TYPST_ASSET" | tar -xJf - -C "$RUNNER_TEMP"
           "$RUNNER_TEMP/${TYPST_ASSET%.tar.xz}/typst" --version
           echo "$RUNNER_TEMP/${TYPST_ASSET%.tar.xz}" >> "$GITHUB_PATH"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - run: npm ci
 
@@ -121,10 +126,11 @@ jobs:
       - name: Check the helper in the package
         env:
           TARGET: ${{ matrix.target }}
+          PINNED_TYPST: ${{ steps.typst.outputs.version }}
         run: |
           version="$(node -p "require('./package.json').version")"
           helper_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' helper/Cargo.toml | head -n 1)"
-          expected="typst-workshop-helper $helper_version (typst 0.15.1)"
+          expected="typst-workshop-helper $helper_version (typst $PINNED_TYPST)"
           dir="$(mktemp -d)"
           unzip -q "typst-workshop-$TARGET-$version.vsix" -d "$dir"
           actual="$("$dir/extension/bin/typst-workshop-helper" --version)"

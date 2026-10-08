@@ -18,7 +18,7 @@ pub use session::Session;
 /// The helper's version, from Cargo.toml.
 pub const HELPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// The typst version the helper is built with; it must match the `=0.15.1` pins in Cargo.toml (a unit test checks it against the typst crates).
+/// The typst version the helper is built with; it must match the `=<version>` pins of the typst crates in Cargo.toml (a unit test checks it against the typst crates). scripts/typst-update.mjs changes both.
 pub const TYPST_VERSION: &str = "0.15.1";
 
 /// Reads requests from `input`, one JSON object per line, and writes one response line per request to `output`, flushing after each. Returns after a `shutdown` request (once its response is written) or at the end of `input`.

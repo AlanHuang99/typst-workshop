@@ -1,9 +1,10 @@
-# For a version tag v<version>: checks the tag against package.json, builds, tests and packages linux-x64 and darwin-arm64 with ci.yml, creates a GitHub Release with the .vsix files and the CHANGELOG.md section of the version, and publishes the .vsix files to Open VSX.
+# For a version tag v<version>, or started by hand on main for the version in package.json: checks the version, builds, tests and packages linux-x64 and darwin-arm64 with ci.yml, creates the GitHub Release v<version> (and, when started by hand, its tag) with the .vsix files and the CHANGELOG.md section of the version, and publishes the .vsix files to Open VSX.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,14 +21,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check the tag against the version in package.json
+      - name: Check the version in package.json against the tag, or that it is not released yet
         id: version
         run: |
           version="$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "::error::Releases are made from main, not from $GITHUB_REF."
+              exit 1
+            fi
+            tags="$(git ls-remote --tags origin "refs/tags/v$version")"
+            if [ -n "$tags" ]; then
+              echo "::error::v$version is released already; raise the version in package.json and add its CHANGELOG.md section first."
+              exit 1
+            fi
+          elif [ "$GITHUB_REF_NAME" != "v$version" ]; then
             echo "::error::The tag $GITHUB_REF_NAME does not match the version in package.json (expected v$version)."
             exit 1
           fi
+          node scripts/release-notes.mjs "$version" > /dev/null
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
@@ -61,8 +73,11 @@ jobs:
       - name: Release notes from CHANGELOG.md
         run: node scripts/release-notes.mjs "$VERSION" > release-notes.md
 
+      # Started by hand, this also creates the tag v<version> on the commit that was built.
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
           body_path: release-notes.md
           files: |
             vsix/typst-workshop-linux-x64-${{ env.VERSION }}.vsix

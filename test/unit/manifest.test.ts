@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { lockedVersion, pinnedTypst } from '../../scripts/typst-update.mjs';
 
 const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const vscodeignore = readFileSync(new URL('../../.vscodeignore', import.meta.url), 'utf8').split('\n');
@@ -32,10 +33,10 @@ test('the notices point to the Apache-2.0 text and to the generated licences of 
   const crates = read('helper/THIRD_PARTY_LICENSES.md');
   expect(crates).toMatch(/^# Third-party licences of the helper\n/);
   expect(crates).toContain('x86_64-unknown-linux-musl, aarch64-apple-darwin and x86_64-apple-darwin');
-  expect(crates).toContain('[typst 0.15.1](https://github.com/typst/typst)');
+  expect(crates).toContain(`[typst ${pinnedTypst(read('helper/Cargo.toml'))}](https://github.com/typst/typst)`);
   expect(crates).toMatch(/\n- \[mimalloc 0\.1\.\d+\]/);
   expect(crates).toMatch(/\n## OpenSSL 3\.\d+\.\d+\n/);
-  expect(crates).toContain('## Notice of typst-assets 0.15.1');
+  expect(crates).toContain(`## Notice of typst-assets ${lockedVersion(read('helper/Cargo.lock'), 'typst-assets')}`);
   expect(crates).toMatch(/\n## Notice of hayagriva \d+\.\d+\.\d+\n[^]*The Creative Commons BY-SA 3\.0 DEED License applies to:/);
   expect(crates).toMatch(/\n## Notice of subsetter \d+\.\d+\.\d+\n[^]*Code from ttf-parser was used\/adapted/);
   expect(manifest.scripts['licenses:helper']).toBe('node scripts/helper-licenses.mjs');
@@ -47,6 +48,11 @@ test("typst's own NOTICE is shipped verbatim and named in the Typst section of t
   const typst = read('THIRD_PARTY_NOTICES.md').split('\n## ').find((section) => section.startsWith('Typst\n'));
   expect(typst).toContain('`licenses/typst-NOTICE.txt`');
   expect(vscodeignore).toContain('!licenses/**');
+});
+
+test('the notices name the version of pdfjs-dist in package.json', () => {
+  const notices = readFileSync(new URL('../../THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
+  expect(notices).toContain(`- Project: https://github.com/mozilla/pdf.js (pdfjs-dist ${manifest.devDependencies['pdfjs-dist']})`);
 });
 
 test('the notices name musl, whose licence is shipped, and say that the embedded fonts are unmodified, with the link to their sources', () => {
