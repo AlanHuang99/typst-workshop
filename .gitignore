@@ -19,3 +19,7 @@ test/fixtures/workspace/**/*.pdf
 
 # Logs
 *.log
+
+# Local secrets
+.env
+.env.*
