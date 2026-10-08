@@ -66,8 +66,6 @@ jobs:
           body_path: release-notes.md
           files: |
             vsix/typst-workshop-linux-x64-${{ env.VERSION }}.vsix
-            vsix/typst-workshop-darwin-arm64-${{ env.VERSION }}.vsix
-            vsix/typst-workshop-darwin-x64-${{ env.VERSION }}.vsix
           fail_on_unmatched_files: true
 
       # ovsx and its dependencies at the versions of tools/ovsx/package-lock.json, without install scripts.
@@ -83,6 +81,6 @@ jobs:
             echo "::warning::The OVSX_PAT secret is not set; the extension was not published to Open VSX."
             exit 0
           fi
-          for target in linux-x64 darwin-arm64 darwin-x64; do
+          for target in linux-x64; do
             tools/ovsx/node_modules/.bin/ovsx publish "vsix/typst-workshop-$target-$VERSION.vsix" --skip-duplicate
           done

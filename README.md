@@ -12,12 +12,12 @@ A VS Code extension for writing Typst documents with the PDF beside the editor:
 
 Compilation uses the Typst 0.15.1 compiler crates, built into the extension's helper program.
 
-Platforms: Linux x64, and macOS on Apple silicon and Intel.
+Platform: Linux x64. The extension runs where VS Code's extension host runs, so it also works from macOS or Windows clients connected over Remote-SSH to a Linux x64 host.
 
 ## Install
 
 - Editors that install extensions from [Open VSX](https://open-vsx.org/extension/alanhuang/typst-workshop): install `alanhuang.typst-workshop` from the Extensions view.
-- VS Code: download the `.vsix` for your platform (`typst-workshop-linux-x64-<version>.vsix`, `typst-workshop-darwin-arm64-<version>.vsix` for Apple silicon, or `typst-workshop-darwin-x64-<version>.vsix` for Intel) from the [Releases page](https://github.com/AlanHuang99/typst-workshop/releases) and run `code --install-extension <file>`. Over Remote-SSH, the extension runs on the remote host: take the file for the remote host's platform and run the command in a terminal of the remote window.
+- VS Code: download `typst-workshop-linux-x64-<version>.vsix` from the [Releases page](https://github.com/AlanHuang99/typst-workshop/releases) and run `code --install-extension <file>`. Over Remote-SSH, the extension runs on the remote host: run the command in a terminal of the remote window.
 
 ## Use
 
@@ -36,7 +36,7 @@ Open the folder that contains the Typst project and any `.typ` file in it.
 | Open the log | | Typst Workshop: Show Log |
 | Open the settings of this extension | | Typst Workshop: Open Settings |
 
-On macOS, use Cmd instead of Ctrl. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
+On a macOS client, use Cmd instead of Ctrl. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
 
 Automatic builds follow `typst-workshop.autoBuild.run`. When the window opens or reloads, the project of the active Typst editor is built once, and so is the project of each restored PDF tab when that tab is first shown, unless the setting is `never`.
 
@@ -111,7 +111,7 @@ npm run package          # builds the helper and the bundles, writes typst-works
 code --install-extension typst-workshop-<platform>-<version>.vsix
 ```
 
-The package is for the platform of the machine that builds it (`linux-x64`, `darwin-arm64` or `darwin-x64`). The published Linux package contains a static helper, built with `npm run package -- --helper-target x86_64-unknown-linux-musl --features vendored-openssl` (needs `musl-tools` and `rustup target add x86_64-unknown-linux-musl`).
+The package is for the platform of the machine that builds it. The published Linux package contains a static helper, built with `npm run package -- --helper-target x86_64-unknown-linux-musl --features vendored-openssl` (needs `musl-tools` and `rustup target add x86_64-unknown-linux-musl`).
 
 ## Development
 

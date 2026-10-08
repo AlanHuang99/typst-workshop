@@ -475,7 +475,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview && tsc --noEmit -p test/viewer",
     "test": "vitest run",
-    "test:helper": "node scripts/cargo.mjs test --manifest-path helper/Cargo.toml",
+    "test:helper": "node scripts/cargo.mjs test --no-fail-fast --manifest-path helper/Cargo.toml",
     "test:extension": "node esbuild.mjs --tests && node test/extension/runTests.mjs",
     "test:viewer": "node esbuild.mjs && playwright test",
     "package": "node scripts/package.mjs",

@@ -229,7 +229,8 @@ fn compile_writes_pdf_and_reports_dependencies() {
         assert!(
             r.dependencies
                 .iter()
-                .any(|d| std::path::Path::new(d) == root.join(f).canonicalize().unwrap()),
+                .any(|d| std::path::Path::new(d).canonicalize().ok()
+                    == root.join(f).canonicalize().ok()),
             "missing {f}"
         );
     }

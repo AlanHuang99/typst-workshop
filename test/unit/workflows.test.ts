@@ -40,8 +40,10 @@ test('ovsx comes from tools/ovsx/package-lock.json and reads the token from the 
   expect(release).toContain('OVSX_PAT: ${{ secrets.OVSX_PAT }}');
 });
 
-test('macOS builds target macOS 11; each package is checked by running the helper inside it', () => {
-  expect(ci).toContain('run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> "$GITHUB_ENV"');
+test('Linux x64 is the only release platform; each package is checked by running the helper inside it', () => {
+  expect(ci).toContain('target: linux-x64');
+  expect(ci).not.toMatch(/macos|darwin/i);
+  expect(release).not.toMatch(/macos|darwin/i);
   expect(ci).toContain('unzip -q "typst-workshop-$TARGET-$version.vsix" -d "$dir"');
   expect(ci).toContain('actual="$("$dir/extension/bin/typst-workshop-helper" --version)"');
 });
