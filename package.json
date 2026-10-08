@@ -2,7 +2,7 @@
   "name": "typst-workshop",
   "displayName": "Typst Workshop",
   "description": "Builds Typst projects to PDF on save, shows the PDF in a tab that reloads in place, and jumps between PDF and source.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "alanhuang",
   "private": true,
   "license": "MIT",

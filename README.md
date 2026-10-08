@@ -36,7 +36,9 @@ Open the folder that contains the Typst project and any `.typ` file in it.
 | Open the log | | Typst Workshop: Show Log |
 | Open the settings of this extension | | Typst Workshop: Open Settings |
 
-On a macOS client, use Cmd instead of Ctrl. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
+On a macOS client, use Cmd instead of Ctrl; in the PDF, both Cmd+click and Ctrl+click open the source. The keys work in Typst editors; in the PDF tab, Ctrl+Alt+B builds the project. The title bar of Typst editors has Build and View PDF buttons, and the title bar of the PDF tab has the Build button.
+
+Each jump between the PDF and the source is listed in the log (Typst Workshop: Show Log) with its page, file, line and character, or with a note that nothing was found.
 
 Automatic builds follow `typst-workshop.autoBuild.run`. When the window opens or reloads, the project of the active Typst editor is built once, and so is the project of each restored PDF tab when that tab is first shown, unless the setting is `never`.
 
@@ -58,6 +60,8 @@ The PDF is named after the entry file (`Manuscript.typ` → `Manuscript.pdf`) an
 ### PDF tab
 
 The toolbar has the page number, zoom, find and a dark-mode button. Keys: Ctrl with `+`, `-` and `0` to zoom; Ctrl+F to find; Alt+← and Alt+→ to go back and forward after a jump; Home and End for the first and last page. Links to other parts of the document move within the tab; web links open in the browser.
+
+The tab carries the Typst Workshop icon. A PDF opened from the Explorer is shown by another viewer, which cannot jump to Typst sources; open the PDF with Typst Workshop: View PDF.
 
 ### Sidebar
 
