@@ -19,6 +19,7 @@ import { entryForPdf, type PdfEntryContext } from './project/pdfEntry';
 import { Project, type BuildOutcome, type ProjectPaths } from './project/project';
 import { entryArg, type SettingsSchema } from './sidebar/model';
 import { registerSidebar, type SidebarApi } from './sidebar/views';
+import { guardStartup } from './startup';
 import { StatusBar } from './statusBar';
 import { ViewerManager } from './viewer/manager';
 import { Emitter } from './util/emitter';
@@ -42,7 +43,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<TypstW
   context.subscriptions.push(channel);
   const logTap = new LogTap();
   const logger: Logger = createLogger(channel, logTap);
+  return guardStartup(() => start(context, logger, logTap), { logger, showError: (message) => void vscode.window.showErrorMessage(message) });
+}
 
+async function start(context: vscode.ExtensionContext, logger: Logger, logTap: LogTap): Promise<TypstWorkshopApi> {
   // Helper binary: the setting (a relative path against the first workspace folder), else TYPST_WORKSHOP_HELPER in extension tests, else <extension>/bin.
   let reportedProblem: string | undefined;
   const helper = () => {
