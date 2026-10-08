@@ -333,6 +333,8 @@ export class FakeWebview {
 
 export class FakeWebviewPanel {
   readonly webview = new FakeWebview();
+  /** The icon in the tab, as the extension set it. */
+  iconPath: Uri | undefined;
   active = false;
   visible = true;
   disposed = false;

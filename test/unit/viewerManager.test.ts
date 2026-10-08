@@ -61,6 +61,11 @@ test('a tab per PDF: title, view type, options, HTML with the bundled assets', a
   expect(manager.panelsFor(pdf)).toEqual([panel]);
 });
 
+test('a new tab carries the icon of the extension', async () => {
+  await manager.open(pdf);
+  expect(testHooks.panels[0].iconPath?.fsPath).toBe('/ext/media/icon.png');
+});
+
 test('the current group setting opens the tab in the active column, unless beside is asked for', async () => {
   group = 'current';
   await manager.open(pdf, { preserveFocus: true });
@@ -195,6 +200,14 @@ test('the serializer restores a tab from its saved state', async () => {
   expect(empty.disposed).toBe(true);
   d.dispose();
   expect(testHooks.serializers.size).toBe(0);
+});
+
+test('a restored tab carries the icon of the extension', async () => {
+  const d = manager.registerSerializer();
+  const restored = new FakeWebviewPanel('typst-workshop.pdf', 'main.pdf', {}, {});
+  await testHooks.serializers.get('typst-workshop.pdf')!.deserializeWebviewPanel(restored, { pdfPath: pdf });
+  expect(restored.iconPath?.fsPath).toBe('/ext/media/icon.png');
+  d.dispose();
 });
 
 test('the serializer restores only tabs whose saved PDF path is absolute and ends in .pdf', async () => {

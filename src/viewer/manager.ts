@@ -171,6 +171,7 @@ export class ViewerManager implements vscode.Disposable {
   }
 
   private attach(webviewPanel: vscode.WebviewPanel, pdf: string): PdfPanel {
+    webviewPanel.iconPath = vscode.Uri.joinPath(this.o.extensionUri, 'media', 'icon.png');
     const panel = new PdfPanel(pdf, webviewPanel);
     const tab: Tab = { panel, ready: false, shown: 0, waiting: false, subscriptions: [] };
     this.tabs.add(tab);
