@@ -666,6 +666,26 @@ test('macOS: ctrl+click arrives as contextmenu, looks up the source like cmd+cli
   expect(await hostMenus(page)).toBe(0);
 });
 
+// The gesture of the field report: Control held and the left button. Chromium on macOS delivers it as contextmenu without a click, Chromium elsewhere as a click; either way it is one jump.
+test('macOS: control held with a left click looks up the source once and opens no host menu', async ({ page }) => {
+  await usePlatform(page, 'mac');
+  await openWith(page, 'boxes', { zoom: 'page-actual' });
+  const target = await framePoint(page, 1, 110, 110);
+  const p = await pixelNear(page, 1, BOXES_PAGE, target.x, target.y);
+  await page.keyboard.down('Control');
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.up('Control');
+  const m = await lastPosted(page, 'inverse');
+  expect(m.page).toBe(1);
+  expect(m.x).toBeCloseTo(110, 0);
+  expect(m.y).toBeCloseTo(290, 0);
+  expect(m.x).toBeCloseTo(p.pdfX, 2);
+  expect(m.y).toBeCloseTo(p.pdfY, 2);
+  await afterFrames(page);
+  expect(await posted(page, 'inverse')).toHaveLength(1);
+  expect(await hostMenus(page)).toBe(0);
+});
+
 test('not macOS: a contextmenu with ctrl held posts nothing and the host menu opens', async ({ page }) => {
   await usePlatform(page, 'other');
   await openWith(page, 'boxes', { zoom: 'page-actual' });
