@@ -1,0 +1,16 @@
+**
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!licenses/**
+!helper/THIRD_PARTY_LICENSES.md
+!language/**
+!media/**
+!dist/extension.js
+!dist/webview/*.js
+!dist/webview/*.mjs
+!dist/webview/*.css
+!dist/webview/images/**
+!bin/typst-workshop-helper

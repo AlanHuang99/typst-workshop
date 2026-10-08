@@ -1,0 +1,9 @@
+{
+  "name": "typst-workshop-ovsx",
+  "private": true,
+  "description": "The Open VSX command-line tool at a fixed version, for the release workflow (npm ci --ignore-scripts --prefix tools/ovsx).",
+  "license": "MIT",
+  "dependencies": {
+    "ovsx": "1.2.0"
+  }
+}

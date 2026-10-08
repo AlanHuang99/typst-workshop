@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data: blob:; script-src 'nonce-harness'; worker-src blob:; connect-src 'self'">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF tab harness</title>
+<link rel="stylesheet" href="/dist/webview/pdf_viewer.css">
+<link rel="stylesheet" href="/dist/webview/viewer.css">
+<script nonce="harness">
+  // Stand-in for the VS Code webview API and a record of CSP violations, both read by test/viewer/viewer.spec.ts.
+  window.__cspViolations = [];
+  document.addEventListener('securitypolicyviolation', (e) => window.__cspViolations.push(e.effectiveDirective + ' ' + e.blockedURI));
+  window.acquireVsCodeApi = () => ({
+    postMessage: (m) => (window.__posted ??= []).push(m),
+    getState: () => window.__state,
+    setState: (s) => (window.__state = s),
+  });
+</script>
+<script type="module" nonce="harness" src="/dist/webview/viewer.js"></script>
+</head>
+<body>
+<div id="app"></div>
+</body>
+</html>

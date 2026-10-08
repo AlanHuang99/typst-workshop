@@ -1,0 +1,88 @@
+# For a version tag v<version>: checks the tag against package.json, builds, tests and packages the three platforms with ci.yml, creates a GitHub Release with the .vsix files and the CHANGELOG.md section of the version, and publishes the .vsix files to Open VSX.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tag and package version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against the version in package.json
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match the version in package.json (expected v$version)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: GitHub Release and Open VSX
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: typst-workshop-*
+          path: vsix
+          merge-multiple: true
+
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release-notes.mjs "$VERSION" > release-notes.md
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          body_path: release-notes.md
+          files: |
+            vsix/typst-workshop-linux-x64-${{ env.VERSION }}.vsix
+            vsix/typst-workshop-darwin-arm64-${{ env.VERSION }}.vsix
+            vsix/typst-workshop-darwin-x64-${{ env.VERSION }}.vsix
+          fail_on_unmatched_files: true
+
+      # ovsx and its dependencies at the versions of tools/ovsx/package-lock.json, without install scripts.
+      - name: Install ovsx
+        run: npm ci --ignore-scripts --prefix tools/ovsx
+
+      # ovsx reads the token from OVSX_PAT itself, so it is never on a command line.
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::warning::The OVSX_PAT secret is not set; the extension was not published to Open VSX."
+            exit 0
+          fi
+          for target in linux-x64 darwin-arm64 darwin-x64; do
+            tools/ovsx/node_modules/.bin/ovsx publish "vsix/typst-workshop-$target-$VERSION.vsix" --skip-duplicate
+          done

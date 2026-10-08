@@ -1,0 +1,21 @@
+# Dependencies and build output
+node_modules/
+dist/
+bin/
+helper/target/
+helper/target-musl/
+*.vsix
+.vscode-test/
+coverage/
+test-results/
+playwright-report/
+
+# Local-only folders: test-workspace/ is a local folder of Typst documents for manual testing; reference/ holds reference clones
+test-workspace/
+reference/
+
+# The PDF that the Extension Development Host (F5) builds in the fixture workspace
+test/fixtures/workspace/**/*.pdf
+
+# Logs
+*.log

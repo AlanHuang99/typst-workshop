@@ -1,0 +1,35 @@
+[package]
+name = "typst-workshop-helper"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+license = "MIT"
+description = "Compiles a Typst project to PDF and maps positions between the PDF and the sources for the Typst Workshop VS Code extension."
+
+[dependencies]
+typst = "=0.15.1"
+typst-layout = "=0.15.1"
+typst-pdf = "=0.15.1"
+typst-ide = "=0.15.1"
+typst-kit = { version = "=0.15.1", features = ["embedded-fonts", "scan-fonts", "system-packages", "universe-packages", "system-downloader", "datetime"] }
+comemo = "0.5.1"
+ecow = "0.2.6"
+serde = { version = "1.0.184", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4.24", default-features = false, features = ["clock", "std"] }
+
+# The static Linux build (musl) uses mimalloc as its allocator: with musl's own, compiles take about 1.5 times as long.
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1.52"
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+# Builds OpenSSL (used on Linux to download packages) from source and links it statically; the published linux-x64 helper is built with it for x86_64-unknown-linux-musl.
+vendored-openssl = ["typst-kit/vendor-openssl"]
+
+[profile.release]
+lto = "thin"
+strip = true

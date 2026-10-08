@@ -1,0 +1,263 @@
+/* Styles of the PDF tab; pdf_viewer.css from pdfjs-dist is loaded before this file. Colours come from the VS Code theme variables, with fallbacks for pages outside VS Code. */
+
+:root {
+  --tw-toolbar-height: 28px;
+  --tw-fg: var(--vscode-foreground, #3b3b3b);
+  --tw-toolbar-bg: var(--vscode-editorWidget-background, #f3f3f3);
+  --tw-border: var(--vscode-panel-border, var(--vscode-widget-border, #d4d4d4));
+  --tw-viewer-bg: var(--vscode-editor-background, #e6e6e6);
+  --tw-input-bg: var(--vscode-input-background, #ffffff);
+  --tw-input-fg: var(--vscode-input-foreground, #3b3b3b);
+  --tw-input-border: var(--vscode-input-border, #cecece);
+  --tw-focus: var(--vscode-focusBorder, #005fb8);
+  --tw-hover-bg: var(--vscode-toolbar-hoverBackground, rgb(184 184 184 / 0.31));
+  --tw-active-bg: var(--vscode-toolbar-activeBackground, rgb(166 166 166 / 0.31));
+  --tw-checked-bg: var(--vscode-inputOption-activeBackground, rgb(0 95 184 / 0.18));
+  --tw-checked-border: var(--vscode-inputOption-activeBorder, #005fb8);
+  --tw-dropdown-bg: var(--vscode-dropdown-background, #ffffff);
+  --tw-dropdown-fg: var(--vscode-dropdown-foreground, #3b3b3b);
+  --tw-dropdown-border: var(--vscode-dropdown-border, #cecece);
+  --tw-widget-bg: var(--vscode-editorWidget-background, #f8f8f8);
+  --tw-widget-shadow: var(--vscode-widget-shadow, rgb(0 0 0 / 0.16));
+  --tw-muted: var(--vscode-descriptionForeground, #717171);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--tw-viewer-bg);
+  color: var(--tw-fg);
+  font-family: var(--vscode-font-family, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+#app {
+  position: absolute;
+  inset: 0;
+}
+
+/* Toolbar (webview/toolbar.ts) */
+
+#toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--tw-toolbar-height);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  background: var(--tw-toolbar-bg);
+  border-bottom: 1px solid var(--tw-border);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  z-index: 20;
+}
+
+.tw-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tw-spacer {
+  flex: 1;
+}
+
+.tw-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tw-button:hover {
+  background: var(--tw-hover-bg);
+}
+
+.tw-button:active {
+  background: var(--tw-active-bg);
+}
+
+.tw-button:focus-visible,
+#zoomSelect:focus-visible {
+  outline: 1px solid var(--tw-focus);
+  outline-offset: -1px;
+}
+
+.tw-button[aria-pressed='true'] {
+  background: var(--tw-checked-bg);
+  border-color: var(--tw-checked-border);
+}
+
+#pageNumber,
+#findInput {
+  height: 20px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  font: inherit;
+  color: var(--tw-input-fg);
+  background: var(--tw-input-bg);
+  border: 1px solid var(--tw-input-border);
+  border-radius: 2px;
+}
+
+#pageNumber {
+  width: 3.5em;
+  text-align: right;
+}
+
+#pageNumber:focus,
+#findInput:focus {
+  outline: 1px solid var(--tw-focus);
+  outline-offset: -1px;
+}
+
+#pageCount {
+  padding: 0 4px;
+}
+
+#zoomSelect {
+  height: 20px;
+  margin: 0 2px;
+  font: inherit;
+  color: var(--tw-dropdown-fg);
+  background: var(--tw-dropdown-bg);
+  border: 1px solid var(--tw-dropdown-border);
+  border-radius: 2px;
+}
+
+/* Find bar (webview/find.ts): a widget under the toolbar's right end. */
+
+#findbar {
+  position: absolute;
+  top: calc(var(--tw-toolbar-height) + 4px);
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--tw-widget-bg);
+  border: 1px solid var(--tw-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--tw-widget-shadow);
+  z-index: 30;
+}
+
+#findbar[hidden] {
+  display: none;
+}
+
+#findInput {
+  width: 14em;
+}
+
+#findCount {
+  min-width: 5.5em;
+  padding: 0 6px;
+  color: var(--tw-muted);
+  font-size: 0.92em;
+  text-align: center;
+}
+
+/* Pages */
+
+#viewerContainer {
+  position: absolute;
+  top: var(--tw-toolbar-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  outline: none;
+}
+
+/* Pages keep their light rendering in dark themes; inversion is a separate setting. */
+#viewer {
+  color-scheme: light;
+}
+
+/* Dark-mode inversion (webview/invert.ts sets --tw-page-filter on #app). */
+.page canvas,
+.page-loading-mask canvas {
+  filter: var(--tw-page-filter, none);
+}
+
+/* Snapshots of the visible pages shown during a reload (webview/reload.ts). */
+.page-loading-mask {
+  position: absolute;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 250ms ease-in-out;
+}
+
+.page-loading-mask canvas {
+  position: absolute;
+  margin: 0;
+}
+
+.page-loading-mask.remove {
+  opacity: 0;
+}
+
+/* Marker drawn after a jump from the source (webview/sync.ts): placed in the scroll container's content, fading out over 1.2 s. */
+.tw-marker {
+  position: absolute;
+  z-index: 15;
+  box-sizing: border-box;
+  pointer-events: none;
+  animation: tw-marker-fade 1.2s ease-in forwards;
+}
+
+.tw-marker-circle {
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 3px solid #e51400;
+  border-radius: 50%;
+  animation-name: tw-marker-ring;
+}
+
+.tw-marker-rect {
+  background: rgb(229 20 0 / 0.25);
+  outline: 1px solid rgb(229 20 0 / 0.7);
+}
+
+@keyframes tw-marker-fade {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tw-marker-ring {
+  0%,
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}

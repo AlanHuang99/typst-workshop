@@ -1,0 +1,28 @@
+# Third-party licences of the helper
+
+The helper program `typst-workshop-helper` is built from the Rust crates listed below, under the licences whose texts follow. The licence of OpenSSL, which the linux-x64 helper contains, and the notices of typst-assets (the fonts and data files the helper embeds), hayagriva (its CSL styles and locales) and subsetter come last. This file is generated from `helper/Cargo.lock` by cargo-about (`npm run licenses:helper`) for the release platforms x86_64-unknown-linux-musl, aarch64-apple-darwin and x86_64-apple-darwin.
+
+## Overview
+
+| Licence | Crates |
+|---|---|
+{{#each overview}}
+| {{{name}}} | {{count}} |
+{{/each}}
+
+## Licence texts
+
+{{#each licenses}}
+### {{{name}}}
+
+Used by:
+
+{{#each used_by}}
+- [{{crate.name}} {{crate.version}}]({{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}})
+{{/each}}
+
+````text
+{{{text}}}
+````
+
+{{/each}}

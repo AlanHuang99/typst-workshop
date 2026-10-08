@@ -1,0 +1,498 @@
+{
+  "name": "typst-workshop",
+  "displayName": "Typst Workshop",
+  "description": "Builds Typst projects to PDF on save, shows the PDF in a tab that reloads in place, and jumps between PDF and source.",
+  "version": "0.2.0",
+  "publisher": "alanhuang",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlanHuang99/typst-workshop.git"
+  },
+  "homepage": "https://github.com/AlanHuang99/typst-workshop#readme",
+  "bugs": {
+    "url": "https://github.com/AlanHuang99/typst-workshop/issues"
+  },
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "typst",
+    "pdf",
+    "synctex"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:typst",
+    "workspaceContains:**/*.typ",
+    "onWebviewPanel:typst-workshop.pdf"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "typst",
+        "aliases": [
+          "Typst",
+          "typst"
+        ],
+        "extensions": [
+          ".typ"
+        ],
+        "configuration": "./language/language-configuration.json"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "typst-workshop",
+          "title": "Typst Workshop",
+          "icon": "media/typst-workshop.svg"
+        }
+      ]
+    },
+    "views": {
+      "typst-workshop": [
+        {
+          "id": "typst-workshop.project",
+          "name": "Project"
+        },
+        {
+          "id": "typst-workshop.commands",
+          "name": "Commands"
+        },
+        {
+          "id": "typst-workshop.settings",
+          "name": "Settings"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "typst-workshop.project",
+        "contents": "Open a Typst file to see the entry file that builds it, its PDF and its last build."
+      }
+    ],
+    "commands": [
+      {
+        "command": "typst-workshop.build",
+        "title": "Build Project",
+        "category": "Typst Workshop",
+        "icon": "$(play)"
+      },
+      {
+        "command": "typst-workshop.view",
+        "title": "View PDF",
+        "category": "Typst Workshop",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "typst-workshop.syncToPdf",
+        "title": "Show Cursor Position in PDF",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.kill",
+        "title": "Stop Build",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.pinEntry",
+        "title": "Set Current File as Entry",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.unpinEntry",
+        "title": "Clear Entry Setting",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.wordCount",
+        "title": "Count Words",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.showLog",
+        "title": "Show Log",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.buildEntry",
+        "title": "Build Project",
+        "category": "Typst Workshop",
+        "icon": "$(play)"
+      },
+      {
+        "command": "typst-workshop.viewEntry",
+        "title": "View PDF",
+        "category": "Typst Workshop",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "typst-workshop.pinEntryFile",
+        "title": "Pin as Entry",
+        "category": "Typst Workshop",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "typst-workshop.unpinEntryFile",
+        "title": "Clear Entry Setting",
+        "category": "Typst Workshop",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "typst-workshop.changeSetting",
+        "title": "Change Setting",
+        "category": "Typst Workshop"
+      },
+      {
+        "command": "typst-workshop.openSettings",
+        "title": "Open Settings",
+        "category": "Typst Workshop",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "typst-workshop.build",
+          "when": "resourceLangId == typst",
+          "group": "navigation@1"
+        },
+        {
+          "command": "typst-workshop.build",
+          "when": "activeWebviewPanelId == 'typst-workshop.pdf'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "typst-workshop.view",
+          "when": "resourceLangId == typst",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "typst-workshop.syncToPdf",
+          "when": "resourceLangId == typst",
+          "group": "navigation@90"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "typst-workshop.openSettings",
+          "when": "view == typst-workshop.settings",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "typst-workshop.buildEntry",
+          "when": "view == typst-workshop.project && viewItem =~ /^(entry|orphan)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "typst-workshop.viewEntry",
+          "when": "view == typst-workshop.project && viewItem =~ /^(entry|orphan)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "typst-workshop.pinEntryFile",
+          "when": "view == typst-workshop.project && viewItem == entry",
+          "group": "inline@3"
+        },
+        {
+          "command": "typst-workshop.unpinEntryFile",
+          "when": "view == typst-workshop.project && viewItem == entry.pinned",
+          "group": "inline@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "typst-workshop.build",
+          "when": "editorLangId == typst || activeWebviewPanelId == 'typst-workshop.pdf'"
+        },
+        {
+          "command": "typst-workshop.view",
+          "when": "editorLangId == typst"
+        },
+        {
+          "command": "typst-workshop.syncToPdf",
+          "when": "editorLangId == typst"
+        },
+        {
+          "command": "typst-workshop.pinEntry",
+          "when": "editorLangId == typst"
+        },
+        {
+          "command": "typst-workshop.buildEntry",
+          "when": "false"
+        },
+        {
+          "command": "typst-workshop.viewEntry",
+          "when": "false"
+        },
+        {
+          "command": "typst-workshop.pinEntryFile",
+          "when": "false"
+        },
+        {
+          "command": "typst-workshop.unpinEntryFile",
+          "when": "false"
+        },
+        {
+          "command": "typst-workshop.changeSetting",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "typst-workshop.build",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "editorTextFocus && editorLangId == typst"
+      },
+      {
+        "command": "typst-workshop.build",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "activeWebviewPanelId == 'typst-workshop.pdf'"
+      },
+      {
+        "command": "typst-workshop.view",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorTextFocus && editorLangId == typst"
+      },
+      {
+        "command": "typst-workshop.syncToPdf",
+        "key": "ctrl+alt+j",
+        "mac": "cmd+alt+j",
+        "when": "editorTextFocus && editorLangId == typst"
+      }
+    ],
+    "configuration": {
+      "title": "Typst Workshop",
+      "properties": {
+        "typst-workshop.mainFile": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Entry file of the project, relative to the workspace folder or absolute. Empty: detected from `// !TYPST root = …` comments, the pinned entry, and `#include`/`#import` lines."
+        },
+        "typst-workshop.rootDir": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Project root for absolute paths and file access. Empty: the entry file's folder, as with `typst compile`. Placeholders: `%DIR%` (entry file's folder), `%WORKSPACE_FOLDER%`."
+        },
+        "typst-workshop.outDir": {
+          "type": "string",
+          "default": "%DIR%",
+          "scope": "resource",
+          "markdownDescription": "Folder for the PDF, which is named after the entry file. Placeholders: `%DIR%` (entry file's folder), `%WORKSPACE_FOLDER%`, `%TMPDIR%`. Relative paths are relative to the workspace folder."
+        },
+        "typst-workshop.fontPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "Extra font folders, absolute or relative to the workspace folder. System fonts and Typst's embedded fonts are always available."
+        },
+        "typst-workshop.inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "scope": "resource",
+          "markdownDescription": "Key/value pairs passed to the document as `sys.inputs`."
+        },
+        "typst-workshop.autoBuild.run": {
+          "type": "string",
+          "enum": [
+            "never",
+            "onSave",
+            "onFileChange"
+          ],
+          "enumDescriptions": [
+            "Build only with the Build command.",
+            "Build when a file of the project is saved in VS Code.",
+            "Build when any file the last build read changes on disk, including files written by other programs."
+          ],
+          "default": "onFileChange",
+          "markdownDescription": "When to build automatically."
+        },
+        "typst-workshop.autoBuild.delay": {
+          "type": "number",
+          "default": 250,
+          "minimum": 0,
+          "markdownDescription": "Quiet period in milliseconds after the last change before an automatic build starts."
+        },
+        "typst-workshop.helperPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Path to the `typst-workshop-helper` binary. Empty: the binary bundled with the extension."
+        },
+        "typst-workshop.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show compile errors and warnings in the Problems panel."
+        },
+        "typst-workshop.message.error.show": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show a popup when a build fails."
+        },
+        "typst-workshop.view.pdf.tab.editorGroup": {
+          "type": "string",
+          "enum": [
+            "right",
+            "current"
+          ],
+          "enumDescriptions": [
+            "Open the PDF tab beside the editor.",
+            "Open the PDF tab in the current editor group."
+          ],
+          "default": "right",
+          "markdownDescription": "Where the PDF tab opens."
+        },
+        "typst-workshop.view.pdf.zoom": {
+          "type": "string",
+          "default": "page-width",
+          "pattern": "^(auto|page-width|page-fit|page-actual|[0-9]*\\.?[0-9]+)$",
+          "markdownDescription": "Initial zoom of the PDF tab: `auto`, `page-width`, `page-fit`, `page-actual`, or a number such as `1.25`."
+        },
+        "typst-workshop.view.pdf.scrollMode": {
+          "type": "string",
+          "enum": [
+            "vertical",
+            "horizontal",
+            "wrapped",
+            "page"
+          ],
+          "default": "vertical",
+          "markdownDescription": "Scroll mode of the PDF tab."
+        },
+        "typst-workshop.view.pdf.spreadMode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "odd",
+            "even"
+          ],
+          "default": "none",
+          "markdownDescription": "Spread mode of the PDF tab: single pages, or two pages side by side starting with an odd or an even page."
+        },
+        "typst-workshop.view.pdf.invertMode": {
+          "type": "string",
+          "enum": [
+            "never",
+            "auto",
+            "always"
+          ],
+          "enumDescriptions": [
+            "Show pages in their original colours.",
+            "Invert pages when VS Code uses a dark or high-contrast theme.",
+            "Always invert pages."
+          ],
+          "default": "never",
+          "markdownDescription": "Dark-mode inversion of the PDF pages. The toolbar button switches it for one tab."
+        },
+        "typst-workshop.view.pdf.invert": {
+          "type": "number",
+          "default": 0.9,
+          "minimum": 0,
+          "maximum": 1,
+          "markdownDescription": "Strength of the inversion, from 0 to 1."
+        },
+        "typst-workshop.sync.keybinding": {
+          "type": "string",
+          "enum": [
+            "ctrl-click",
+            "double-click"
+          ],
+          "enumDescriptions": [
+            "Ctrl+click (Cmd+click on macOS) in the PDF opens the source.",
+            "Double-click in the PDF opens the source."
+          ],
+          "default": "ctrl-click",
+          "markdownDescription": "Mouse gesture that jumps from the PDF to the source."
+        },
+        "typst-workshop.sync.indicator": {
+          "type": "string",
+          "enum": [
+            "circle",
+            "rectangle",
+            "none"
+          ],
+          "default": "circle",
+          "markdownDescription": "Marker shown in the PDF after jumping from the source."
+        },
+        "typst-workshop.sync.afterBuild": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "After each successful build, show the cursor position in the open PDF tab."
+        },
+        "typst-workshop.wordCount.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the word count of the last successful build in the status bar."
+        },
+        "typst-workshop.editing.enabled": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "On unless the Tinymist extension is installed.",
+            "Always on.",
+            "Always off."
+          ],
+          "default": "auto",
+          "markdownDescription": "Headings in the Outline view, folding, and clickable file paths in Typst files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:helper && npm run build:ext",
+    "build:helper": "node scripts/build-helper.mjs",
+    "build:ext": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview && tsc --noEmit -p test/viewer",
+    "test": "vitest run",
+    "test:helper": "node scripts/cargo.mjs test --manifest-path helper/Cargo.toml",
+    "test:extension": "node esbuild.mjs --tests && node test/extension/runTests.mjs",
+    "test:viewer": "node esbuild.mjs && playwright test",
+    "package": "node scripts/package.mjs",
+    "icon": "node scripts/render-icon.mjs",
+    "licenses:helper": "node scripts/helper-licenses.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.0",
+    "@types/vscode": "~1.100.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "^0.28.2",
+    "mocha": "^12.0.3",
+    "pdfjs-dist": "6.4.299",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

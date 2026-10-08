@@ -1,0 +1,33 @@
+# cargo-about configuration for helper/THIRD_PARTY_LICENSES.md (npm run licenses:helper).
+# The accepted licences are the ones the helper's dependencies use, in order of preference for crates that offer a choice.
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
+]
+# The platforms the extension is released for.
+targets = [
+    "x86_64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+workarounds = ["chrono", "rustix", "linux-raw-sys", "unicode-ident"]
+# The helper itself is covered by the LICENSE file of the repository.
+private = { ignore = true }
+
+# libm's LICENSE.txt holds the MIT licence of the crate followed by the Apache-2.0 licence of contributions; the first part is the crate's licence.
+[libm.clarify]
+license = "MIT"
+
+[[libm.clarify.files]]
+path = "LICENSE.txt"
+start = "rust-lang/libm as a whole is available for use under the MIT license:"
+end = "SOFTWARE."
+checksum = "88abfa952aa119ec3671f35fa0dc52589721f7f93982bd90f9649528f8fd74f8"
