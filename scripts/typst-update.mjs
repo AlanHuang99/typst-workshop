@@ -262,7 +262,11 @@ async function apply(to) {
   const typstRust = packages.find((p) => p.name === 'typst')?.rust_version;
   const ownRust = rustVersion(read('helper/Cargo.toml'));
   const rust = typstRust && ownRust && newerRust(typstRust, ownRust) ? typstRust : undefined;
-  if (rust !== undefined) write('helper/Cargo.toml', read('helper/Cargo.toml').replace(/^rust-version = "[^"]+"/m, `rust-version = "${rust}"`));
+  if (rust !== undefined) {
+    write('helper/Cargo.toml', read('helper/Cargo.toml').replace(/^rust-version = "[^"]+"/m, `rust-version = "${rust}"`));
+    // cargo picks the versions that the manifest's Rust version builds with, so the other crates move again.
+    run(localCargo(), ['update', '--manifest-path', 'helper/Cargo.toml']);
+  }
 
   write('licenses/typst-NOTICE.txt', notice);
   write('README.md', readmeFor(read('README.md'), to, rust));
