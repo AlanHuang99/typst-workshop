@@ -160,12 +160,12 @@ export function registerSidebar(context: vscode.ExtensionContext, deps: SidebarD
     const built = deps.projects.all().filter((p) => p.lastOutcome !== undefined || running.has(p));
     built.sort((a, b) => (a.entry < b.entry ? -1 : a.entry > b.entry ? 1 : 0));
     const known = built.map((p) => summary(p.entry, p));
+    // The focused PDF tab comes first: while it is the active editor, VS Code can still report the Typst editor that had the focus before it as the active text editor (on macOS when the window does not have the system focus).
+    const pdf = deps.activePdf();
+    const pdfEntry = pdf === undefined ? undefined : deps.entryOfPdf(pdf);
+    if (pdf !== undefined && pdfEntry !== undefined) return { activePdf: { pdf, project: summary(pdfEntry, deps.projects.get(pdfEntry)) }, known };
     const file = activeTypstFile();
-    if (file === undefined) {
-      const pdf = deps.activePdf();
-      const entry = pdf === undefined ? undefined : deps.entryOfPdf(pdf);
-      return pdf !== undefined && entry !== undefined ? { activePdf: { pdf, project: summary(entry, deps.projects.get(entry)) }, known } : { known };
-    }
+    if (file === undefined) return { known };
     try {
       const d = await decideEntry(file, 'auto', deps.entries);
       return { active: { file, rule: d.rule, project: d.entry === undefined ? undefined : summary(d.entry, deps.projects.get(d.entry)) }, known };

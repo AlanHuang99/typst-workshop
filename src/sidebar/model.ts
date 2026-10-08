@@ -55,7 +55,7 @@ export interface ProjectSummary {
 export interface ProjectViewState {
   /** The active Typst editor's file, the rule that decided its entry (`auto` mode), and that entry unless the rule gave none. */
   active?: { file: string; rule: EntryRule; project?: ProjectSummary };
-  /** The focused PDF tab's PDF and the entry that writes it; marked when no Typst editor is active. */
+  /** The focused PDF tab's PDF and the entry that writes it; marked before the active Typst editor. */
   activePdf?: { pdf: string; project: ProjectSummary };
   /** The projects built in this window, in the order to list them; the marked entry may be among them. */
   known: ProjectSummary[];
@@ -164,18 +164,18 @@ function noEntryNode(file: string): SidebarNode {
   };
 }
 
-/** The Project view: the active editor's entry (or the note that it has none), or else the entry of the focused PDF tab; then every other project built in this window. */
+/** The Project view: the entry of the focused PDF tab, or else the active editor's entry (or the note that it has none); then every other project built in this window. */
 export function projectNodes(state: ProjectViewState): SidebarNode[] {
   const nodes: SidebarNode[] = [];
   const { active, activePdf } = state;
   let marked: string | undefined;
-  if (active) {
+  if (activePdf) {
+    nodes.push(entryNode(activePdf.project, { description: FOCUSED_PDF, reason: `Writes ${path.basename(activePdf.pdf)}, the PDF of the focused tab.` }));
+    marked = activePdf.project.entry;
+  } else if (active) {
     const file = path.basename(active.file);
     nodes.push(active.project ? entryNode(active.project, { description: RULE_WORDS[active.rule], reason: `Entry of ${file}: ${reason(active.rule, file)} (${active.rule}).` }) : noEntryNode(active.file));
     marked = active.project?.entry;
-  } else if (activePdf) {
-    nodes.push(entryNode(activePdf.project, { description: FOCUSED_PDF, reason: `Writes ${path.basename(activePdf.pdf)}, the PDF of the focused tab.` }));
-    marked = activePdf.project.entry;
   }
   for (const p of state.known) if (p.entry !== marked) nodes.push(entryNode(p));
   return nodes;

@@ -242,7 +242,7 @@ describe('Project view', () => {
     expect((await roots('typst-workshop.project')).map((n) => n.label)).toEqual(['main.typ', 'slides.typ']);
   });
 
-  test('without a Typst editor, a focused PDF tab marks the project that writes the PDF, and the view follows the tab', async () => {
+  test('a focused PDF tab marks the project that writes the PDF, before an active Typst editor, and the view follows the tab', async () => {
     fake(main).finish(success(), [main, section]);
     const slides = write('slides.typ', 'Slides.\n');
     let changed = nextChange('typst-workshop.project');
@@ -260,11 +260,14 @@ describe('Project view', () => {
       ['main.typ', undefined, 'file'],
     ]);
     expect(projects.get(slides)).toBeUndefined();
-    // A PDF that no entry writes marks nothing; a Typst editor comes before the PDF tab.
+    // A PDF that no entry writes marks nothing.
     focusedPdf = path.join(dir, 'other.pdf');
     expect((await roots('typst-workshop.project')).map((n) => [n.label, n.icon])).toEqual([['main.typ', 'file']]);
+    // The focused PDF tab comes before the Typst editor that VS Code may still report as active; without the tab, the editor's entry is shown.
     focusedPdf = path.join(dir, 'main.pdf');
     testHooks.setActiveEditor(testHooks.editor(notes));
+    expect((await roots('typst-workshop.project')).map((n) => [n.label, n.description])).toEqual([['main.typ', 'writes the focused PDF']]);
+    focusedPdf = undefined;
     expect((await roots('typst-workshop.project')).map((n) => [n.label, n.contextValue])).toEqual([
       ['notes.typ', 'orphan'],
       ['main.typ', 'entry'],

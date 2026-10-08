@@ -78,7 +78,7 @@ describe('Project view', () => {
     ]);
   });
 
-  test('without a Typst editor, a focused PDF tab marks the project that writes the PDF', () => {
+  test('a focused PDF tab marks the project that writes the PDF, before an active Typst editor', () => {
     const slides = summary({ entry: '/w/slides.typ', pdf: '/w/slides.pdf' });
     const nodes = projectNodes({ activePdf: { pdf: '/w/slides.pdf', project: slides }, known: [summary(), slides] });
     expect(nodes.map((n) => [n.label, n.description, n.icon, n.expanded])).toEqual([
@@ -87,10 +87,10 @@ describe('Project view', () => {
     ]);
     expect(nodes[0].tooltip).toBe('/w/slides.typ\nWrites slides.pdf, the PDF of the focused tab.');
     expect(nodes[0].children?.map((c) => c.label)).toEqual(['slides.pdf', 'Not built in this window']);
-    // A Typst editor comes first.
-    expect(projectNodes({ active: { file: section, rule: 'include scan', project: summary() }, activePdf: { pdf: '/w/slides.pdf', project: slides }, known: [slides] }).map((n) => [n.label, n.icon])).toEqual([
-      ['main.typ', 'target'],
-      ['slides.typ', 'file'],
+    // The focused PDF tab comes before the Typst editor that VS Code may still report as active.
+    expect(projectNodes({ active: { file: section, rule: 'include scan', project: summary() }, activePdf: { pdf: '/w/slides.pdf', project: slides }, known: [summary(), slides] }).map((n) => [n.label, n.icon])).toEqual([
+      ['slides.typ', 'target'],
+      ['main.typ', 'file'],
     ]);
   });
 

@@ -99,7 +99,11 @@ suite('Sidebar', function () {
     await build(main);
     try {
       await api.viewers.open(pdf);
-      await waitFor(() => api.sidebar.project()[0]?.description === 'writes the focused PDF', 10_000, () => `the Project view to mark main.typ for its PDF tab; it shows ${show(api.sidebar.project())}`);
+      await waitFor(
+        () => api.sidebar.project()[0]?.description === 'writes the focused PDF',
+        10_000,
+        () => `the Project view to mark main.typ for its PDF tab (window focused: ${vscode.window.state.focused}; active text editor: ${vscode.window.activeTextEditor?.document.uri.fsPath}; active PDF tab: ${api.viewers.activePdf()}); it shows ${show(api.sidebar.project())}`,
+      );
       const [marked] = api.sidebar.project();
       assert.equal(marked.entry, main);
       assert.equal(marked.icon, 'target');
