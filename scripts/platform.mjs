@@ -40,12 +40,22 @@ export function isExecutable(file) {
 }
 
 /**
- * The cargo of this machine (see `findCargo`); throws with installation advice when there is none.
+ * The error message when there is no cargo, with the Rust version that a manifest asks for (its `rust-version`).
+ * @param {string} cargoToml
+ * @returns {string}
+ */
+export function noCargoMessage(cargoToml) {
+  const rust = /^rust-version = "([^"]+)"/m.exec(cargoToml)?.[1];
+  return `cargo was not found on PATH, in $CARGO_HOME/bin or in ~/.cargo/bin; install Rust${rust === undefined ? '' : ` ${rust} or later`} (https://rustup.rs)`;
+}
+
+/**
+ * The cargo of this machine (see `findCargo`); throws with installation advice when there is none, naming the Rust version of helper/Cargo.toml.
  * @returns {string}
  */
 export function localCargo() {
   const cargo = findCargo(process.env, os.homedir(), isExecutable);
-  if (cargo === undefined) throw new Error('cargo was not found on PATH, in $CARGO_HOME/bin or in ~/.cargo/bin; install Rust 1.92 or later (https://rustup.rs)');
+  if (cargo === undefined) throw new Error(noCargoMessage(fs.readFileSync(new URL('../helper/Cargo.toml', import.meta.url), 'utf8')));
   return cargo;
 }
 

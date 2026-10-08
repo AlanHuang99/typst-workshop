@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { describe, expect, test } from 'vitest';
-import { binaryTarget, elfLinkage, findCargo, helperBuildArgs, helperProblem, hostTarget, packageOptions, vsixName } from '../../scripts/platform.mjs';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import { binaryTarget, elfLinkage, findCargo, helperBuildArgs, helperProblem, hostTarget, localCargo, noCargoMessage, packageOptions, vsixName } from '../../scripts/platform.mjs';
+import { rustVersion } from '../../scripts/typst-update.mjs';
 
 describe('findCargo', () => {
   const files = (...paths: string[]) => (p: string) => paths.includes(p);
@@ -21,6 +23,26 @@ describe('findCargo', () => {
     const env = { PATH: ['', 'bin', '/usr/bin'].join(path.delimiter) };
     expect(findCargo(env, '/home/u', files('bin/cargo', '/home/u/.cargo/bin/cargo'))).toBe('/home/u/.cargo/bin/cargo');
     expect(findCargo(env, '/home/u', files())).toBeUndefined();
+  });
+});
+
+describe('without cargo', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('the advice names the Rust version of the manifest', () => {
+    expect(noCargoMessage('[package]\nname = "typst-workshop-helper"\nrust-version = "1.95"\n')).toBe('cargo was not found on PATH, in $CARGO_HOME/bin or in ~/.cargo/bin; install Rust 1.95 or later (https://rustup.rs)');
+    expect(noCargoMessage('[package]\nname = "typst-workshop-helper"\n')).toBe('cargo was not found on PATH, in $CARGO_HOME/bin or in ~/.cargo/bin; install Rust (https://rustup.rs)');
+  });
+
+  test('localCargo names the Rust version of helper/Cargo.toml', () => {
+    vi.stubEnv('PATH', '');
+    vi.stubEnv('CARGO_HOME', '');
+    vi.stubEnv('HOME', '/nonexistent');
+    const rust = rustVersion(readFileSync(new URL('../../helper/Cargo.toml', import.meta.url), 'utf8'));
+    expect(rust).toMatch(/^\d+\.\d+/);
+    expect(() => localCargo()).toThrow(`; install Rust ${rust} or later (https://rustup.rs)`);
   });
 });
 
