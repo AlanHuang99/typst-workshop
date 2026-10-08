@@ -8,6 +8,12 @@ const MARKER_MS = 1200;
 /** Where a forward target ends up, as a fraction of the view's height from the top. */
 const TARGET_FROM_TOP = 0.4;
 
+/** Whether the page runs on macOS; the webview reports the platform of the client, also over Remote-SSH. */
+function isMac(): boolean {
+  const { userAgentData, platform } = navigator as Navigator & { userAgentData?: { platform?: string } };
+  return /^mac/i.test(userAgentData?.platform || platform || '');
+}
+
 /** Posts `inverse` for Ctrl/Cmd+click or double-click (per `syncKeybinding`) on a page. */
 export function installInverse(view: View, getConfig: () => ViewerConfig, post: (m: FromViewer) => void): void {
   const lookup = (e: MouseEvent): boolean => {
@@ -24,6 +30,15 @@ export function installInverse(view: View, getConfig: () => ViewerConfig, post: 
       if (!lookup(e)) return;
       e.preventDefault();
       e.stopPropagation();
+    },
+    true,
+  );
+  // On macOS, Ctrl+click is a context-menu click: the page gets `contextmenu`, no `click`, and the webview host opens its own menu unless the event is cancelled. There it jumps like Cmd+click and no menu opens.
+  view.container.addEventListener(
+    'contextmenu',
+    (e) => {
+      if (!e.ctrlKey || e.metaKey || getConfig().syncKeybinding !== 'ctrl-click' || !isMac()) return;
+      if (lookup(e)) e.preventDefault();
     },
     true,
   );

@@ -118,6 +118,26 @@ async function ctrlClick(page: Page, x: number, y: number): Promise<void> {
   await page.keyboard.up('ControlOrMeta');
 }
 
+/** Makes the page report macOS or another platform; call it before the page loads. The tab reads the platform from `navigator`, so the tests do not depend on the machine they run on. */
+async function usePlatform(page: Page, platform: 'mac' | 'other'): Promise<void> {
+  await page.addInitScript((mac: boolean) => {
+    Object.defineProperty(navigator, 'platform', { value: mac ? 'MacIntel' : 'Linux x86_64', configurable: true });
+    Object.defineProperty(navigator, 'userAgentData', { value: { platform: mac ? 'macOS' : 'Linux', mobile: false, brands: [] }, configurable: true });
+  }, platform === 'mac');
+}
+
+/** A secondary click with the keys held: the page receives `contextmenu`, which is also how macOS reports Ctrl+click. */
+async function secondaryClick(page: Page, x: number, y: number, keys: string[] = []): Promise<void> {
+  for (const key of keys) await page.keyboard.down(key);
+  await page.mouse.click(x, y, { button: 'right' });
+  for (const key of [...keys].reverse()) await page.keyboard.up(key);
+}
+
+/** How many context menus VS Code's webview host would have opened (the harness stands in for its listener). */
+async function hostMenus(page: Page): Promise<number> {
+  return page.evaluate(() => (window as any).__hostContextMenus.length);
+}
+
 async function scrollTop(page: Page): Promise<number> {
   return page.evaluate(() => document.getElementById('viewerContainer')!.scrollTop);
 }
@@ -624,6 +644,52 @@ test('double-click mode: a double-click on an external link opens it once and lo
   expect(await posted(page, 'inverse')).toHaveLength(1);
   expect(await posted(page, 'openExternal')).toEqual([{ type: 'openExternal', url: 'https://example.com/' }]);
   expect(page.url()).toBe(harnessUrl);
+});
+
+test('macOS: ctrl+click arrives as contextmenu, looks up the source like cmd+click and opens no host menu', async ({ page }) => {
+  await usePlatform(page, 'mac');
+  await openWith(page, 'boxes', { zoom: 'page-actual' });
+  const target = await framePoint(page, 1, 110, 110);
+  const p = await pixelNear(page, 1, BOXES_PAGE, target.x, target.y);
+  await ctrlClick(page, p.x, p.y);
+  const click = await lastPosted(page, 'inverse');
+  expect(await hostMenus(page)).toBe(0);
+  await secondaryClick(page, p.x, p.y, ['Control']);
+  await expect.poll(async () => (await posted(page, 'inverse')).length).toBe(2);
+  const [, menu] = await posted(page, 'inverse');
+  expect(menu).toEqual(click);
+  expect(menu.page).toBe(1);
+  expect(menu.x).toBeCloseTo(110, 0);
+  expect(menu.y).toBeCloseTo(290, 0);
+  expect(menu.x).toBeCloseTo(p.pdfX, 2);
+  expect(menu.y).toBeCloseTo(p.pdfY, 2);
+  expect(await hostMenus(page)).toBe(0);
+});
+
+test('not macOS: a contextmenu with ctrl held posts nothing and the host menu opens', async ({ page }) => {
+  await usePlatform(page, 'other');
+  await openWith(page, 'boxes', { zoom: 'page-actual' });
+  const target = await framePoint(page, 1, 110, 110);
+  const p = await pixelNear(page, 1, BOXES_PAGE, target.x, target.y);
+  await secondaryClick(page, p.x, p.y, ['Control']);
+  await expect.poll(() => hostMenus(page)).toBe(1);
+  expect(await posted(page, 'inverse')).toEqual([]);
+});
+
+test('macOS: a plain right click, ctrl+cmd, a point outside the pages and double-click mode post nothing and keep the host menu', async ({ page }) => {
+  await usePlatform(page, 'mac');
+  await openWith(page, 'boxes', { zoom: 'page-actual' });
+  const target = await framePoint(page, 1, 110, 110);
+  const p = await pixelNear(page, 1, BOXES_PAGE, target.x, target.y);
+  await secondaryClick(page, p.x, p.y);
+  await secondaryClick(page, p.x, p.y, ['Control', 'Meta']);
+  const view = (await page.locator('#viewerContainer').boundingBox())!;
+  await secondaryClick(page, Math.round(view.x + view.width - 60), Math.round(view.y + 100), ['Control']);
+  await expect.poll(() => hostMenus(page)).toBe(3);
+  await send(page, { type: 'config', config: { ...defaults, zoom: 'page-actual', syncKeybinding: 'double-click' } });
+  await secondaryClick(page, p.x, p.y, ['Control']);
+  await expect.poll(() => hostMenus(page)).toBe(4);
+  expect(await posted(page, 'inverse')).toEqual([]);
 });
 
 test('forward scrolls to page 3 and shows the circle marker, then removes it', async ({ page }) => {
