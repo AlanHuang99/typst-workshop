@@ -114,6 +114,8 @@ test('the second job runs only when an update is due and only git, gh and first-
   expect(publish).toContain("\n    if: needs.prepare.outputs.newer == 'true' && needs.prepare.outputs.exists != 'true'\n");
   expect(publish).toMatch(/\n {4}permissions:\n {6}contents: write\b[^\n]*\n {6}pull-requests: write\b[^\n]*\n {6}actions: write\b[^\n]*\n {4}steps:\n/);
   expect([...publish.matchAll(/uses: (\S+)/g)].map((m) => m[1])).toEqual(['actions/checkout@v7', 'actions/download-artifact@v8']);
+  // Without a ref, actions/checkout takes the commit of the run, which the first job checked out too.
+  expect(publish).not.toMatch(/^\s+ref:/m);
   expect(publish).not.toMatch(/\b(?:node|npm|npx|cargo|rustup)\b/);
   expect(publish).toContain('git apply --index "$RUNNER_TEMP/typst-update/update.patch"');
   expect(publish).toContain('git push --force origin "$BRANCH"');
