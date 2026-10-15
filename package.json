@@ -483,7 +483,7 @@
     "licenses:helper": "node scripts/helper-licenses.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.10.0",
     "@types/vscode": "~1.100.0",
